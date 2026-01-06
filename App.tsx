@@ -62,6 +62,7 @@ export default function SkyRavenApp() {
   const [ministryGoals, setMinistryGoals] = useState<MinistryGoal[]>(INITIAL_MINISTRY_GOALS);
   const [adminPasscode, setAdminPasscode] = useState('SkyRaven');
   const [showPasscodePrompt, setShowPasscodePrompt] = useState(false);
+  const [familiesSupported, setFamiliesSupported] = useState(342);
 
   const handleLogin = () => {
     setUser({ name: "Sarah Jenkins", role: "Supporter" });
@@ -108,6 +109,18 @@ export default function SkyRavenApp() {
     setMinistryGoals(ministryGoals.map(g => g.id === goalId ? { ...g, ...updates } : g));
   };
 
+  const incrementFamiliesSupported = () => {
+    setFamiliesSupported(prev => prev + 1);
+  };
+
+  const decrementFamiliesSupported = () => {
+    setFamiliesSupported(prev => Math.max(0, prev - 1));
+  };
+
+  const setFamiliesSupportedCount = (count: number) => {
+    setFamiliesSupported(Math.max(0, count));
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 flex justify-center font-sans text-slate-100 selection:bg-sky-500 selection:text-white">
       
@@ -125,12 +138,12 @@ export default function SkyRavenApp() {
           {view !== 'auth' && (
             <div className="flex-1 flex flex-col h-full">
               <main className="flex-1 overflow-y-auto no-scrollbar pb-24">
-                {view === 'home' && <HomeScreen onChangeView={setView} projects={projects} ministryGoals={ministryGoals} />}
+                {view === 'home' && <HomeScreen onChangeView={setView} projects={projects} ministryGoals={ministryGoals} familiesSupported={familiesSupported} />}
                 {view === 'donate' && <DonateScreen onBack={() => setView('home')} projects={projects} />}
                 {view === 'expenses' && <ExpensesScreen />}
                 {view === 'documents' && <DocumentsScreen onBack={() => setView('home')} />}
                 {view === 'profile' && <ProfileScreen user={user} onLogout={() => setView('auth')} />}
-                {view === 'admin' && <AdminScreen projects={projects} onAddProject={addProject} onDeleteProject={deleteProject} onUpdateProject={updateProject} ministryGoals={ministryGoals} onAddMinistryGoal={addMinistryGoal} onDeleteMinistryGoal={deleteMinistryGoal} onUpdateMinistryGoal={updateMinistryGoal} onBack={() => setView('home')} adminPasscode={adminPasscode} onChangePasscode={setAdminPasscode} />}
+                {view === 'admin' && <AdminScreen projects={projects} onAddProject={addProject} onDeleteProject={deleteProject} onUpdateProject={updateProject} ministryGoals={ministryGoals} onAddMinistryGoal={addMinistryGoal} onDeleteMinistryGoal={deleteMinistryGoal} onUpdateMinistryGoal={updateMinistryGoal} onBack={() => setView('home')} adminPasscode={adminPasscode} onChangePasscode={setAdminPasscode} familiesSupported={familiesSupported} onIncrementFamilies={incrementFamiliesSupported} onDecrementFamilies={decrementFamiliesSupported} onSetFamiliesCount={setFamiliesSupportedCount} />}
               </main>
               
               <BottomNav current={view} onChange={setView} />
@@ -194,7 +207,7 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
 // ==========================================
 // 2. HOME SCREEN (Dashboard)
 // ==========================================
-function HomeScreen({ onChangeView, projects, ministryGoals }: { onChangeView: (view: string) => void; projects: Project[]; ministryGoals: MinistryGoal[] }) {
+function HomeScreen({ onChangeView, projects, ministryGoals, familiesSupported }: { onChangeView: (view: string) => void; projects: Project[]; ministryGoals: MinistryGoal[]; familiesSupported: number }) {
   return (
     <div className="p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -249,7 +262,7 @@ function HomeScreen({ onChangeView, projects, ministryGoals }: { onChangeView: (
       {/* IMPACT METRICS */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-center">
-          <div className="text-3xl font-black text-white mb-1">342</div>
+          <div className="text-3xl font-black text-white mb-1">{familiesSupported}</div>
           <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Families Supported</div>
         </div>
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-center">
@@ -488,7 +501,7 @@ function ExpensesScreen() {
 // ==========================================
 // 4. ADMIN DASHBOARD
 // ==========================================
-function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject, ministryGoals, onAddMinistryGoal, onDeleteMinistryGoal, onUpdateMinistryGoal, onBack, adminPasscode, onChangePasscode }: { projects: Project[]; onAddProject: (project: Omit<Project, 'id'>) => void; onDeleteProject: (projectId: number) => void; onUpdateProject: (projectId: number, updates: Partial<Project>) => void; ministryGoals: MinistryGoal[]; onAddMinistryGoal: (goal: Omit<MinistryGoal, 'id'>) => void; onDeleteMinistryGoal: (goalId: number) => void; onUpdateMinistryGoal: (goalId: number, updates: Partial<MinistryGoal>) => void; onBack: () => void; adminPasscode: string; onChangePasscode: (passcode: string) => void }) {
+function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject, ministryGoals, onAddMinistryGoal, onDeleteMinistryGoal, onUpdateMinistryGoal, onBack, adminPasscode, onChangePasscode, familiesSupported, onIncrementFamilies, onDecrementFamilies, onSetFamiliesCount }: { projects: Project[]; onAddProject: (project: Omit<Project, 'id'>) => void; onDeleteProject: (projectId: number) => void; onUpdateProject: (projectId: number, updates: Partial<Project>) => void; ministryGoals: MinistryGoal[]; onAddMinistryGoal: (goal: Omit<MinistryGoal, 'id'>) => void; onDeleteMinistryGoal: (goalId: number) => void; onUpdateMinistryGoal: (goalId: number, updates: Partial<MinistryGoal>) => void; onBack: () => void; adminPasscode: string; onChangePasscode: (passcode: string) => void; familiesSupported: number; onIncrementFamilies: () => void; onDecrementFamilies: () => void; onSetFamiliesCount: (count: number) => void }) {
   const [activeTab, setActiveTab] = useState<'missions' | 'goals'>('missions');
   const [showForm, setShowForm] = useState(false);
   const [showPasscodeForm, setShowPasscodeForm] = useState(false);
@@ -643,6 +656,38 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
           >
             🔒
           </button>
+        </div>
+
+        {/* Families Supported Counter */}
+        <div className="mt-4 bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Families Supported</label>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onDecrementFamilies}
+              className="w-10 h-10 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg flex items-center justify-center text-white font-bold text-xl transition-colors"
+            >
+              −
+            </button>
+            <div className="flex-1 bg-slate-800 rounded-lg px-4 py-2 text-center">
+              <span className="text-2xl font-bold text-white">{familiesSupported}</span>
+            </div>
+            <button
+              onClick={onIncrementFamilies}
+              className="w-10 h-10 bg-sky-600 hover:bg-sky-700 border border-sky-500 rounded-lg flex items-center justify-center text-white font-bold text-xl transition-colors"
+            >
+              +
+            </button>
+          </div>
+          <div className="mt-2">
+            <input
+              type="number"
+              value={familiesSupported}
+              onChange={(e) => onSetFamiliesCount(parseInt(e.target.value) || 0)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-sky-500"
+              placeholder="Set count directly..."
+              min="0"
+            />
+          </div>
         </div>
       </div>
 
