@@ -211,7 +211,7 @@ function HomeScreen({ onChangeView, projects, ministryGoals }: { onChangeView: (
         </div>
         <button 
           className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center hover:bg-slate-700 transition-colors"
-          onClick={() => setView('documents')}
+          onClick={() => onChangeView('documents')}
           title="View Ministry Documents"
         >
           <FileText size={18} className="text-slate-400" />
