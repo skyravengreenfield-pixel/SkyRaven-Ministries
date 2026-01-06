@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Heart, PieChart, User, Home, Plus, ChevronRight, ArrowUpRight, CreditCard, Check, LogOut, FileText, Bell } from 'lucide-react';
+import { DocumentsScreen } from './src/screens/DocumentsScreen';
 
 // --- MOCK DATA ---
 const INITIAL_PROJECTS = [
@@ -55,7 +56,7 @@ interface MinistryGoal {
 }
 
 export default function SkyRavenApp() {
-  const [view, setView] = useState('auth'); // auth, home, donate, expenses, profile, admin
+  const [view, setView] = useState('auth'); // auth, home, donate, expenses, profile, admin, documents
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [ministryGoals, setMinistryGoals] = useState<MinistryGoal[]>(INITIAL_MINISTRY_GOALS);
@@ -127,6 +128,7 @@ export default function SkyRavenApp() {
                 {view === 'home' && <HomeScreen onChangeView={setView} projects={projects} ministryGoals={ministryGoals} />}
                 {view === 'donate' && <DonateScreen onBack={() => setView('home')} projects={projects} />}
                 {view === 'expenses' && <ExpensesScreen />}
+                {view === 'documents' && <DocumentsScreen onBack={() => setView('home')} />}
                 {view === 'profile' && <ProfileScreen user={user} onLogout={() => setView('auth')} />}
                 {view === 'admin' && <AdminScreen projects={projects} onAddProject={addProject} onDeleteProject={deleteProject} onUpdateProject={updateProject} ministryGoals={ministryGoals} onAddMinistryGoal={addMinistryGoal} onDeleteMinistryGoal={deleteMinistryGoal} onUpdateMinistryGoal={updateMinistryGoal} onBack={() => setView('home')} adminPasscode={adminPasscode} onChangePasscode={setAdminPasscode} />}
               </main>
@@ -209,7 +211,7 @@ function HomeScreen({ onChangeView, projects, ministryGoals }: { onChangeView: (
         </div>
         <button 
           className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center hover:bg-slate-700 transition-colors"
-          onClick={() => window.open('https://skyraven-ministries.com/documents', '_blank')}
+          onClick={() => setView('documents')}
           title="View Ministry Documents"
         >
           <FileText size={18} className="text-slate-400" />
