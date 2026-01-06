@@ -207,9 +207,13 @@ function HomeScreen({ onChangeView, projects, ministryGoals }: { onChangeView: (
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">October 2023 Overview</p>
           </div>
         </div>
-        <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
-          <BellIcon />
-        </div>
+        <button 
+          className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center hover:bg-slate-700 transition-colors"
+          onClick={() => window.open('https://skyraven-ministries.com/documents', '_blank')}
+          title="View Ministry Documents"
+        >
+          <FileText size={18} className="text-slate-400" />
+        </button>
       </div>
 
       {/* MAIN STATS CARD */}
