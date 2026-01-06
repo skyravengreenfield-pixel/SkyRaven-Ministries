@@ -1061,7 +1061,13 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
 // ==========================================
 function ProfileScreen({ user, onLogout }: { user: User | null; onLogout: () => void }) {
   if (!user) {
-    return null;
+    return (
+      <div className="p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center text-slate-400">
+          <p>Please log in to view your profile</p>
+        </div>
+      </div>
+    );
   }
   
   return (
