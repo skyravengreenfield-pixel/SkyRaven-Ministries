@@ -28,15 +28,6 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
     },
     {
       id: '2',
-      title: '2024 Financial Report',
-      description: 'Annual financial statement and transparency report',
-      date: 'January 2024',
-      url: '/documents/financial-report-2024.pdf',
-      size: '2.4 MB',
-      category: 'financial'
-    },
-    {
-      id: '3',
       title: 'Ministry Guidelines',
       description: 'Official ministry policies and operational guidelines',
       date: 'December 2023',
