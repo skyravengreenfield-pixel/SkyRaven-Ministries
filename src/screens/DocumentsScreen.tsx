@@ -37,6 +37,15 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
     },
     {
       id: '3',
+      title: 'Form 1023-EZ',
+      description: 'IRS tax-exempt status application - Filed yet Pending',
+      date: 'Filed 2024',
+      url: '#',
+      size: 'Pending',
+      category: 'other'
+    },
+    {
+      id: '4',
       title: 'Ministry Guidelines',
       description: 'Official ministry policies and operational guidelines',
       date: 'December 2023',
@@ -126,15 +135,22 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
                   <span>{doc.size}</span>
                 </div>
 
-                {/* Download Button */}
-                <a
-                  href={doc.url}
-                  download
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-sm font-medium transition-colors"
-                >
-                  <Download size={16} />
-                  Download
-                </a>
+                {/* Download Button or Pending Status */}
+                {doc.url === '#' || doc.size === 'Pending' ? (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700/50 text-slate-400 rounded-lg text-sm font-medium">
+                    <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                    Pending IRS Approval
+                  </div>
+                ) : (
+                  <a
+                    href={doc.url}
+                    download
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Download size={16} />
+                    Download
+                  </a>
+                )}
               </div>
             </div>
           </div>
