@@ -37,6 +37,15 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
     },
     {
       id: '3',
+      title: 'Conflict of Interest Policy',
+      description: 'Official conflict of interest policy and procedures',
+      date: 'Adopted 2021',
+      url: '/documents/Conflict of Interest Policy.pdf',
+      size: 'PDF',
+      category: 'policy'
+    },
+    {
+      id: '4',
       title: 'Form 1023-EZ',
       description: 'IRS tax-exempt status application - Filed yet Pending',
       date: 'Filed 2024',
@@ -45,7 +54,7 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
       category: 'other'
     },
     {
-      id: '4',
+      id: '5',
       title: 'Ministry Guidelines',
       description: 'Official ministry policies and operational guidelines',
       date: 'December 2023',
