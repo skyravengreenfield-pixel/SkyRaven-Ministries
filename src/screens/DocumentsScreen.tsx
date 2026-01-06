@@ -53,15 +53,6 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
       size: 'Pending',
       category: 'other'
     },
-    {
-      id: '5',
-      title: 'Ministry Guidelines',
-      description: 'Official ministry policies and operational guidelines',
-      date: 'December 2023',
-      url: '/documents/ministry-guidelines.pdf',
-      size: '1.8 MB',
-      category: 'policy'
-    },
     // Add more documents as needed
   ];
 
