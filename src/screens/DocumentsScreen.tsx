@@ -19,6 +19,15 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
   const documents: Document[] = [
     {
       id: '1',
+      title: 'Certificate of Incorporation',
+      description: 'Official state certificate of incorporation for SkyRaven Ministries',
+      date: 'Filed 2021',
+      url: '/documents/Cert. of Incorporation.jpg',
+      size: '475 KB',
+      category: 'policy'
+    },
+    {
+      id: '2',
       title: '2024 Financial Report',
       description: 'Annual financial statement and transparency report',
       date: 'January 2024',
@@ -27,7 +36,7 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
       category: 'financial'
     },
     {
-      id: '2',
+      id: '3',
       title: 'Ministry Guidelines',
       description: 'Official ministry policies and operational guidelines',
       date: 'December 2023',
