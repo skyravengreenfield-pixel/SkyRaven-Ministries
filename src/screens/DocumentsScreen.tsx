@@ -28,6 +28,15 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
     },
     {
       id: '2',
+      title: 'SkyRaven ByLaws',
+      description: 'Official organizational bylaws and governance structure',
+      date: 'Adopted 2021',
+      url: '/documents/SkyRaven ByLaws.pdf',
+      size: 'PDF',
+      category: 'policy'
+    },
+    {
+      id: '3',
       title: 'Ministry Guidelines',
       description: 'Official ministry policies and operational guidelines',
       date: 'December 2023',
