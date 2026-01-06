@@ -1,4 +1,4 @@
-import { FileText, Download, Calendar, FileCheck, ArrowLeft } from 'lucide-react';
+import { FileText, Eye, Calendar, FileCheck, ArrowLeft } from 'lucide-react';
 
 interface Document {
   id: string;
@@ -135,7 +135,7 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
                   <span>{doc.size}</span>
                 </div>
 
-                {/* Download Button or Pending Status */}
+                {/* View Button or Pending Status */}
                 {doc.url === '#' || doc.size === 'Pending' ? (
                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700/50 text-slate-400 rounded-lg text-sm font-medium">
                     <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -144,11 +144,12 @@ export function DocumentsScreen({ onBack }: DocumentsScreenProps) {
                 ) : (
                   <a
                     href={doc.url}
-                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-sm font-medium transition-colors"
                   >
-                    <Download size={16} />
-                    Download
+                    <Eye size={16} />
+                    View Document
                   </a>
                 )}
               </div>
