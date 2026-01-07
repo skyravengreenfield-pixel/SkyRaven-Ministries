@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Heart, PieChart, User, Home, Plus, ChevronRight, ArrowUpRight, CreditCard, Check, LogOut, FileText, Bell } from 'lucide-react';
 import { DocumentsScreen } from './src/screens/DocumentsScreen';
 
@@ -47,11 +47,11 @@ export default function SkyRavenApp() {
   const [loadingBalance, setLoadingBalance] = useState(false);
 
   // Fetch Stripe balance on mount and when view changes to home
-  useState(() => {
+  useEffect(() => {
     if (view === 'home' && user) {
       fetchStripeBalance();
     }
-  });
+  }, [view, user]);
 
   const fetchStripeBalance = async () => {
     setLoadingBalance(true);
