@@ -27,7 +27,14 @@ class FirebaseAuthService {
    */
   private get auth(): Auth {
     if (!this._auth) {
-      this._auth = getFirebaseAuth();
+      console.log('Getting Firebase Auth instance...');
+      try {
+        this._auth = getFirebaseAuth();
+        console.log('✓ Firebase Auth instance obtained');
+      } catch (error) {
+        console.error('Failed to get Firebase Auth:', error);
+        throw error;
+      }
     }
     return this._auth;
   }

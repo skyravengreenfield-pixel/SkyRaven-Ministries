@@ -31,8 +31,16 @@ let analytics: Analytics | null = null;
  */
 export function initializeFirebase(): void {
   try {
+    console.log('Initializing Firebase with config:', {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY ? '✓ present' : '✗ missing',
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    });
+
     if (!firebaseConfig.apiKey) {
       logger.warn('Firebase configuration missing - running without Firebase');
+      console.error('Firebase API key is missing! Check your .env.local file.');
       return;
     }
 
@@ -46,9 +54,11 @@ export function initializeFirebase(): void {
         analytics = getAnalytics(app);
       }
 
+      console.log('✓ Firebase initialized successfully');
       logger.info('Firebase initialized successfully');
     }
   } catch (error) {
+    console.error('Failed to initialize Firebase:', error);
     logger.error('Failed to initialize Firebase', { error });
     throw error;
   }
