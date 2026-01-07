@@ -62,20 +62,32 @@ class FirebaseAuthService {
    * Sign up with email and password
    */
   async signUp(email: string, password: string, displayName: string): Promise<User> {
+    console.log('=== SIGN UP ATTEMPT ===');
+    console.log('Email:', email);
+    console.log('Password length:', password?.length);
+    console.log('Display name:', displayName);
+    
     try {
+      console.log('Calling createUserWithEmailAndPassword...');
       const userCredential = await createUserWithEmailAndPassword(this.auth, email, password);
+      console.log('✓ User created:', userCredential.user.uid);
       
       // Update profile with display name
+      console.log('Updating profile...');
       await updateProfile(userCredential.user, { displayName });
+      console.log('✓ Profile updated');
       
       logger.info('User signed up successfully', { uid: userCredential.user.uid });
       return this.mapFirebaseUser(userCredential.user);
     } catch (error: any) {
-      console.error('Sign up error details:', {
-        code: error.code,
-        message: error.message,
-        fullError: error
-      });
+      console.error('=== SIGN UP ERROR ===');
+      console.error('Error type:', typeof error);
+      console.error('Error code:', error?.code);
+      console.error('Error message:', error?.message);
+      console.error('Error name:', error?.name);
+      console.error('Full error object:', JSON.stringify(error, null, 2));
+      console.error('Error stack:', error?.stack);
+      
       logger.error('Sign up failed', { error });
       throw this.handleAuthError(error);
     }
