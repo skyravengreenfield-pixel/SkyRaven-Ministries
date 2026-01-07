@@ -250,7 +250,7 @@ function HomeScreen({ onChangeView, projects, ministryGoals, familiesSupported }
           <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Active Missions</div>
         </div>
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-center">
-          <div className="text-3xl font-black text-white mb-1">7</div>
+          <div className="text-3xl font-black text-white mb-1">0</div>
           <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Donors</div>
         </div>
       </div>
