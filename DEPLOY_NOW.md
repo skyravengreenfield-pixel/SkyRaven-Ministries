@@ -58,25 +58,56 @@ VITE_ENABLE_ERROR_TRACKING=true
 
 ## 🔥 Deploy Firebase Functions (Required for Stripe)
 
-Since you can't authenticate in the terminal, deploy from your **local computer**:
+### Manual Deployment from Local Computer
 
-### On Your Local Machine:
+You'll deploy Firebase Functions manually from your local machine:
+
+### Prerequisites:
 ```bash
-# 1. Clone the repo (if not already)
+# Install Firebase CLI globally (if not already installed)
+npm install -g firebase-tools
+```
+
+### Deployment Steps:
+
+**1. Clone the Repository (if not already on your local machine):**
+```bash
 git clone https://github.com/skyravengreenfield-pixel/SkyRaven-Ministries
 cd SkyRaven-Ministries
+```
 
-# 2. Login to Firebase
+**2. Login to Firebase:**
+```bash
 firebase login
+```
+This will open a browser window for authentication.
 
-# 3. Set Stripe secret key
+**3. Install Function Dependencies:**
+```bash
+cd functions
+npm install
+cd ..
+```
+
+**4. Configure Stripe Secret Key:**
+```bash
 firebase functions:config:set stripe.secret_key="sk_live_YOUR_SECRET_KEY"
+```
+**Your Stripe Secret Key:** Get it from Stripe Dashboard → Developers → API Keys
 
-# 4. Deploy functions
+**5. Deploy Functions:**
+```bash
 firebase deploy --only functions
 ```
 
-**Your Stripe Secret Key:** Check your Stripe Dashboard → Developers → API Keys
+**6. Verify Deployment:**
+After deployment completes, you'll see:
+```
+✔  Deploy complete!
+Functions URL: https://us-central1-skyraven-ministries.cloudfunctions.net
+```
+
+✅ **Done!** Your Firebase Functions are now live.
 
 ---
 

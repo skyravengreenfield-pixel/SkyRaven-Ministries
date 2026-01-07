@@ -60,8 +60,9 @@ exports.createPaymentIntent = functions.https.onRequest(async (req, res) => {
           projectId: projectId?.toString() || '',
           message: message || '',
         },
+        payment_method_types: ['card'], // Only allow card payments
         automatic_payment_methods: {
-          enabled: true,
+          enabled: false, // Disable automatic payment methods to prevent Affirm, etc.
         },
       });
 

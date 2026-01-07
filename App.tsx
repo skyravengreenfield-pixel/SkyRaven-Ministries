@@ -1,7 +1,59 @@
 import { useState, useEffect } from 'react';
 import { Heart, PieChart, User, Home, Plus, ChevronRight, ArrowUpRight, CreditCard, Check, LogOut, FileText, Bell } from 'lucide-react';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
 import { DocumentsScreen } from './src/screens/DocumentsScreen';
 import { firebaseAuthService } from './src/services/firebaseAuth';
+
+// Initialize Stripe
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+
+// Stripe Payment Form Component
+function StripePaymentForm({ onSuccess, onError }: { onSuccess: () => void; onError: (error: Error) => void }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setIsProcessing(true);
+
+    try {
+      const { error, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        redirect: 'if_required',
+      });
+
+      if (error) {
+        onError(new Error(error.message));
+      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        onSuccess();
+      }
+    } catch (err: any) {
+      onError(err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <PaymentElement options={{
+        layout: 'tabs',
+        paymentMethodOrder: ['card']
+      }} />
+      <button
+        type="submit"
+        disabled={!stripe || isProcessing}
+        className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-200 transition-colors shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isProcessing ? 'Processing...' : 'Complete Donation'}
+      </button>
+    </form>
+  );
+}
 
 // --- MOCK DATA ---
 const INITIAL_PROJECTS: Project[] = [];
@@ -45,6 +97,7 @@ export default function SkyRavenApp() {
   const [showPasscodePrompt, setShowPasscodePrompt] = useState(false);
   const [familiesSupported, setFamiliesSupported] = useState(0);
   const [stripeBalance, setStripeBalance] = useState(0);
+  const [stripePending, setStripePending] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(false);
 
   // Listen to Firebase auth state changes
@@ -78,6 +131,7 @@ export default function SkyRavenApp() {
       if (response.ok) {
         const data = await response.json();
         setStripeBalance(data.available || 0);
+        setStripePending(data.pending || 0);
       }
     } catch (error) {
       console.error('Failed to fetch balance:', error);
@@ -160,8 +214,8 @@ export default function SkyRavenApp() {
           {view !== 'auth' && (
             <div className="flex-1 flex flex-col h-full">
               <main className="flex-1 overflow-y-auto no-scrollbar pb-24">
-                {view === 'home' && <HomeScreen onChangeView={setView} projects={projects} ministryGoals={ministryGoals} familiesSupported={familiesSupported} stripeBalance={stripeBalance} loadingBalance={loadingBalance} />}
-                {view === 'donate' && <DonateScreen onBack={() => setView('home')} projects={projects} />}
+                {view === 'home' && <HomeScreen onChangeView={setView} projects={projects} ministryGoals={ministryGoals} familiesSupported={familiesSupported} stripeBalance={stripeBalance} stripePending={stripePending} loadingBalance={loadingBalance} />}
+                {view === 'donate' && <DonateScreen onBack={() => setView('home')} projects={projects} onPaymentSuccess={fetchStripeBalance} />}
                 {view === 'expenses' && <ExpensesScreen />}
                 {view === 'documents' && <DocumentsScreen onBack={() => setView('home')} />}
                 {view === 'profile' && <ProfileScreen user={user} onLogout={() => { setUser(null); setView('auth'); }} />}
@@ -324,7 +378,7 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
 // ==========================================
 // 2. HOME SCREEN (Dashboard)
 // ==========================================
-function HomeScreen({ onChangeView, projects, ministryGoals, familiesSupported, stripeBalance, loadingBalance }: { onChangeView: (view: string) => void; projects: Project[]; ministryGoals: MinistryGoal[]; familiesSupported: number; stripeBalance: number; loadingBalance: boolean }) {
+function HomeScreen({ onChangeView, projects, ministryGoals, familiesSupported, stripeBalance, stripePending, loadingBalance }: { onChangeView: (view: string) => void; projects: Project[]; ministryGoals: MinistryGoal[]; familiesSupported: number; stripeBalance: number; stripePending: number; loadingBalance: boolean }) {
   return (
     <div className="p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -359,13 +413,18 @@ function HomeScreen({ onChangeView, projects, ministryGoals, familiesSupported, 
             <span className="bg-white/20 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-white">Total Raised</span>
           </div>
           <div className="text-5xl font-black text-white mb-2">
-            {loadingBalance ? '...' : `$${stripeBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            {loadingBalance ? '...' : `$${(stripeBalance + stripePending).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </div>
+          {stripePending > 0 && (
+            <div className="text-xs text-sky-200 mb-2">
+              ${stripePending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pending
+            </div>
+          )}
           <div className="h-2 bg-black/20 rounded-full w-full overflow-hidden mb-2">
-            <div className="h-full bg-white" style={{ width: `${Math.min((stripeBalance / 190000) * 100, 100)}%` }}></div>
+            <div className="h-full bg-white" style={{ width: `${Math.min(((stripeBalance + stripePending) / 190000) * 100, 100)}%` }}></div>
           </div>
           <div className="flex justify-between text-xs font-medium text-sky-100">
-            <span>{Math.round((stripeBalance / 190000) * 100)}% of Annual Goal</span>
+            <span>{Math.round(((stripeBalance + stripePending) / 190000) * 100)}% of Annual Goal</span>
             <span>Goal: $190k</span>
           </div>
         </div>
@@ -474,7 +533,7 @@ function HomeScreen({ onChangeView, projects, ministryGoals, familiesSupported, 
 // ==========================================
 // 3. DONATE SCREEN
 // ==========================================
-function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Project[] }) {
+function DonateScreen({ onBack, projects, onPaymentSuccess }: { onBack: () => void; projects: Project[]; onPaymentSuccess: () => void }) {
   const [amount, setAmount] = useState(50);
   const [frequency, setFrequency] = useState('One-Time');
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -485,6 +544,7 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
   const [message, setMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   const handleDonation = async () => {
     setError('');
@@ -511,7 +571,7 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
       
       // Try to connect to Firebase Functions
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
       
       const response = await fetch(`${apiUrl}/createPaymentIntent`, {
         method: 'POST',
@@ -519,7 +579,7 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: Math.round(amount * 100), // Convert to cents
+          amount: amount, // Send dollar amount, backend will convert to cents
           currency: 'usd',
           projectId: selectedProject?.id,
           donorName,
@@ -539,51 +599,21 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
 
       const { clientSecret } = await response.json();
       
-      // Success - Firebase Functions working
-      alert(`✅ Payment Successful!\n\nThank you ${donorName}!\n\nYour ${frequency.toLowerCase()} donation of $${amount} has been processed.\n\nConfirmation email sent to: ${donorEmail}`);
-      
-      // Reset form
-      setAmount(50);
-      setDonorName('');
-      setDonorEmail('');
-      setMessage('');
-      setSelectedProject(null);
-      setShowPaymentForm(false);
+      // Set client secret to show Stripe payment form
+      setClientSecret(clientSecret);
+      setIsProcessing(false);
       
     } catch (err: any) {
       console.error('Donation error:', err);
       
-      // If API not available or connection failed, use development mode
-      if (err.name === 'AbortError' || err.message === 'Failed to fetch' || err.message === 'API_NOT_AVAILABLE') {
-        // Simulate processing in development mode
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        const donationData = {
-          amount,
-          donorName,
-          donorEmail,
-          message,
-          frequency,
-          project: selectedProject?.title || 'General Fund',
-          timestamp: new Date().toISOString()
-        };
-        
-        console.log('💳 Donation Recorded (Development Mode):', donationData);
-        
-        alert(`✅ Thank you ${donorName}!\n\nYour ${frequency.toLowerCase()} donation of $${amount} to ${donationData.project} has been recorded.\n\nConfirmation will be sent to: ${donorEmail}\n\n⚠️ Note: This is running in demo mode. Deploy Firebase Functions to enable real payment processing.`);
-        
-        // Reset form
-        setAmount(50);
-        setDonorName('');
-        setDonorEmail('');
-        setMessage('');
-        setSelectedProject(null);
-        setShowPaymentForm(false);
-        return;
+      // Show appropriate error message
+      if (err.name === 'AbortError') {
+        setError('Connection timeout. Please check your internet connection and try again.');
+      } else if (err.message === 'Failed to fetch' || err.message === 'API_NOT_AVAILABLE') {
+        setError('Unable to connect to payment server. Please ensure Firebase Functions are deployed and running.');
+      } else {
+        setError(err.message || 'Failed to process donation. Please try again.');
       }
-      
-      // Real error - show to user
-      setError(err.message || 'Failed to process donation. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -652,30 +682,61 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
               </div>
             )}
 
-            {/* Payment Method Info */}
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-              <div className="flex items-center gap-3 mb-2">
-                <CreditCard size={18} className="text-sky-400" />
-                <span className="text-white font-bold text-sm">Secure Payment</span>
+            {/* Stripe Payment Form */}
+            {clientSecret && (
+              <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                <Elements stripe={stripePromise} options={{ 
+                  clientSecret,
+                  appearance: {
+                    theme: 'night',
+                  },
+                }}>
+                  <StripePaymentForm 
+                    onSuccess={() => {
+                      alert(`✅ Payment Successful!\n\nThank you ${donorName}!\n\nYour ${frequency.toLowerCase()} donation of $${amount} has been processed.\n\nConfirmation email sent to: ${donorEmail}`);
+                      onPaymentSuccess(); // Refresh balance
+                      setShowPaymentForm(false);
+                      setClientSecret(null);
+                      setAmount(50);
+                      setDonorName('');
+                      setDonorEmail('');
+                      setMessage('');
+                      setSelectedProject(null);
+                    }}
+                    onError={(err) => setError(err.message)}
+                  />
+                </Elements>
               </div>
-              <p className="text-slate-500 text-xs">
-                Your payment information is secure and encrypted. This is a {frequency.toLowerCase()} donation.
-              </p>
-            </div>
+            )}
 
-            <button
-              onClick={handleDonation}
-              disabled={isProcessing}
-              className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-200 transition-colors shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isProcessing ? (
-                <>Processing...</>
-              ) : (
-                <>
-                  <CreditCard size={18} /> Complete Donation ${amount}
-                </>
-              )}
-            </button>
+            {/* Payment Method Info */}
+            {!clientSecret && (
+              <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                <div className="flex items-center gap-3 mb-2">
+                  <CreditCard size={18} className="text-sky-400" />
+                  <span className="text-white font-bold text-sm">Secure Payment</span>
+                </div>
+                <p className="text-slate-500 text-xs">
+                  Your payment information is secure and encrypted. This is a {frequency.toLowerCase()} donation.
+                </p>
+              </div>
+            )}
+
+            {!clientSecret && (
+              <button
+                onClick={handleDonation}
+                disabled={isProcessing}
+                className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-200 transition-colors shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isProcessing ? (
+                  <>Processing...</>
+                ) : (
+                  <>
+                    <CreditCard size={18} /> Complete Donation ${amount}
+                  </>
+                )}
+              </button>
+            )}
 
             <p className="text-xs text-center text-slate-600 mt-4">
               By continuing, you agree to our donation terms. You will receive an email receipt for tax purposes.
