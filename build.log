@@ -1,0 +1,32 @@
+nohup: ignoring input
+
+> skyraven-ministries-app@1.0.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 1384 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.64 kB │ gzip:  0.36 kB
+dist/assets/index-Gkn4cvyp.css   30.52 kB │ gzip:  5.87 kB
+dist/assets/ui-Dca4uWr6.js        4.12 kB │ gzip:  1.84 kB │ map:    14.83 kB
+dist/assets/vendor-C2nfJo7w.js  139.53 kB │ gzip: 44.81 kB │ map:   348.08 kB
+dist/assets/index-C-j0U-8R.js   353.40 kB │ gzip: 78.67 kB │ map: 2,351.70 kB
+✓ built in 8.66s
+
+✨ [vite-plugin-compression]:algorithm=gzip - compressed file successfully: 
+dist//workspaces/SkyRaven-Ministries/assets/index-Gkn4cvyp.css.gz   29.80kb / gzip: 5.71kb
+dist//workspaces/SkyRaven-Ministries/assets/ui-Dca4uWr6.js.gz       4.02kb / gzip: 1.80kb
+dist//workspaces/SkyRaven-Ministries/assets/vendor-C2nfJo7w.js.gz   136.26kb / gzip: 43.66kb
+dist//workspaces/SkyRaven-Ministries/assets/index-C-j0U-8R.js.gz    345.13kb / gzip: 76.51kb
+
+
+
+✨ [vite-plugin-compression]:algorithm=brotliCompress - compressed file successfully: 
+dist//workspaces/SkyRaven-Ministries/assets/ui-Dca4uWr6.js.br       4.02kb / brotliCompress: 1.58kb
+dist//workspaces/SkyRaven-Ministries/assets/index-Gkn4cvyp.css.br   29.80kb / brotliCompress: 4.88kb
+dist//workspaces/SkyRaven-Ministries/assets/vendor-C2nfJo7w.js.br   136.26kb / brotliCompress: 38.17kb
+dist//workspaces/SkyRaven-Ministries/assets/index-C-j0U-8R.js.br    345.13kb / brotliCompress: 63.96kb
+
+

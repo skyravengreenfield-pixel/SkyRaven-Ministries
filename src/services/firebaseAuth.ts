@@ -13,6 +13,7 @@ import {
   sendPasswordResetEmail,
   signInWithPopup,
   GoogleAuthProvider,
+  Auth,
 } from 'firebase/auth';
 import { getFirebaseAuth } from '../config/firebase';
 import { logger } from '../utils/logger';
