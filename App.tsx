@@ -3,33 +3,13 @@ import { Heart, PieChart, User, Home, Plus, ChevronRight, ArrowUpRight, CreditCa
 import { DocumentsScreen } from './src/screens/DocumentsScreen';
 
 // --- MOCK DATA ---
-const INITIAL_PROJECTS = [
-  { id: 1, title: "Family Passes to Community Pool for Single Parents", goal: 8000, raised: 5200, category: "Community", image: "cyan" },
-  { id: 2, title: "Living Conditions Emergency Support for Families", goal: 25000, raised: 18300, category: "Aid", image: "red" },
-  { id: 3, title: "Clean Water Initiative", goal: 50000, raised: 32500, category: "Infrastructure", image: "blue" },
-  { id: 4, title: "Youth Outreach 2024", goal: 15000, raised: 12800, category: "Evangelism", image: "orange" },
-  { id: 5, title: "Emergency Relief Fund", goal: 100000, raised: 45000, category: "Aid", image: "red" },
-];
+const INITIAL_PROJECTS: Project[] = [];
 
-const EXPENSES = [
-  { id: 101, title: "Water Filtration Units", date: "Oct 24, 2023", amount: 4250.00, category: "Infrastructure", status: "Verified" },
-  { id: 102, title: "Event Venue Deposit", date: "Oct 22, 2023", amount: 1500.00, category: "Events", status: "Verified" },
-  { id: 103, title: "Medical Supplies", date: "Oct 20, 2023", amount: 850.75, category: "Aid", status: "Pending Audit" },
-  { id: 104, title: "Staff Travel (Flight)", date: "Oct 18, 2023", amount: 645.20, category: "Logistics", status: "Verified" },
-  { id: 105, title: "Digital Server Costs", date: "Oct 15, 2023", amount: 120.00, category: "Admin", status: "Verified" },
-];
+const EXPENSES: any[] = [];
 
-const MY_DONATIONS = [
-  { id: 1, date: "Oct 01, 2023", amount: 50.00, project: "General Fund" },
-  { id: 2, date: "Sep 01, 2023", amount: 50.00, project: "General Fund" },
-];
+const MY_DONATIONS: any[] = [];
 
-const INITIAL_MINISTRY_GOALS = [
-  { id: 1, title: "Empower Communities", description: "Provide resources and support to build stronger, self-sustaining communities.", goal: 30000, raised: 18500, icon: "🤝", color: "emerald" },
-  { id: 2, title: "Spread the Gospel", description: "Share the message of hope and salvation through outreach and evangelism.", goal: 20000, raised: 12400, icon: "📖", color: "sky" },
-  { id: 3, title: "Support Families", description: "Strengthen family units with practical help and spiritual guidance.", goal: 25000, raised: 16800, icon: "👨‍👩‍👧‍👦", color: "purple" },
-  { id: 4, title: "Global Impact", description: "Extend our ministry reach to communities worldwide in need.", goal: 40000, raised: 22300, icon: "🌍", color: "indigo" },
-];
+const INITIAL_MINISTRY_GOALS: MinistryGoal[] = [];
 
 interface User {
   name: string;
@@ -62,10 +42,10 @@ export default function SkyRavenApp() {
   const [ministryGoals, setMinistryGoals] = useState<MinistryGoal[]>(INITIAL_MINISTRY_GOALS);
   const [adminPasscode, setAdminPasscode] = useState('SkyRaven');
   const [showPasscodePrompt, setShowPasscodePrompt] = useState(false);
-  const [familiesSupported, setFamiliesSupported] = useState(342);
+  const [familiesSupported, setFamiliesSupported] = useState(0);
 
   const handleLogin = () => {
-    setUser({ name: "Sarah Jenkins", role: "Supporter" });
+    setUser({ name: "Guest", role: "Supporter" });
     setView('home');
   };
 
@@ -1130,7 +1110,7 @@ function ProfileScreen({ user, onLogout }: { user: User | null; onLogout: () => 
       <div className="grid grid-cols-2 gap-4 mb-8">
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-center">
           <div className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Total Given</div>
-          <div className="text-2xl font-black text-white">$4,250</div>
+          <div className="text-2xl font-black text-white">$0</div>
         </div>
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-center">
           <div className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Tax Receipt</div>

@@ -1,3 +1,11 @@
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user' | 'supporter';
+  createdAt: string;
+}
+
 export interface Donation {
   id: string;
   amount: number;
