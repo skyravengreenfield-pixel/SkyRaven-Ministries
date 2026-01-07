@@ -19,8 +19,18 @@ import { logger } from '../utils/logger';
 import { User } from '../types';
 
 class FirebaseAuthService {
-  private auth = getFirebaseAuth();
+  private _auth: Auth | null = null;
   private googleProvider = new GoogleAuthProvider();
+
+  /**
+   * Get Firebase Auth instance (lazy-loaded)
+   */
+  private get auth(): Auth {
+    if (!this._auth) {
+      this._auth = getFirebaseAuth();
+    }
+    return this._auth;
+  }
 
   /**
    * Sign in with email and password
