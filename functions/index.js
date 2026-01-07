@@ -1,6 +1,6 @@
 /**
  * Firebase Cloud Functions for SkyRaven Ministries
- * Handles Stripe payment processing
+ * Handles Stripe payment processing and donation management
  */
 
 const functions = require('firebase-functions');
