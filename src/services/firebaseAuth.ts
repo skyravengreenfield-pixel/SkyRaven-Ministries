@@ -128,7 +128,7 @@ class FirebaseAuthService {
       id: firebaseUser.uid,
       email: firebaseUser.email || '',
       name: firebaseUser.displayName || 'User',
-      role: 'Supporter', // Default role, can be customized
+      role: 'supporter', // Default role, can be customized
       photoURL: firebaseUser.photoURL || undefined,
       emailVerified: firebaseUser.emailVerified,
     };
