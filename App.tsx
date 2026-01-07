@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Heart, PieChart, User, Home, Plus, ChevronRight, ArrowUpRight, CreditCard, Check, LogOut, FileText, Bell } from 'lucide-react';
 import { DocumentsScreen } from './src/screens/DocumentsScreen';
+import { firebaseAuthService } from './src/services/firebaseAuth';
 
 // --- MOCK DATA ---
 const INITIAL_PROJECTS: Project[] = [];
@@ -186,7 +187,7 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
 
     try {
       if (isSignUp) {
-        // Sign up logic - would connect to Firebase Auth
+        // Sign up with Firebase
         if (!name || !email || !password) {
           setError('Please fill in all fields');
           setLoading(false);
@@ -197,28 +198,21 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
           setLoading(false);
           return;
         }
-        // TODO: Implement Firebase signUp from firebaseAuth.ts
-        console.log('Sign up:', { name, email, password });
-        // Simulate success
-        setTimeout(() => {
-          onLogin();
-          setLoading(false);
-        }, 500);
+        
+        await firebaseAuthService.signUp(email, password, name);
+        onLogin();
       } else {
-        // Login logic
+        // Login with Firebase
         if (!email || !password) {
           setError('Please enter email and password');
           setLoading(false);
           return;
         }
-        // TODO: Implement Firebase signIn from firebaseAuth.ts
-        console.log('Login:', { email, password });
-        // Simulate success
-        setTimeout(() => {
-          onLogin();
-          setLoading(false);
-        }, 500);
+        
+        await firebaseAuthService.signIn(email, password);
+        onLogin();
       }
+      setLoading(false);
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
       setLoading(false);
