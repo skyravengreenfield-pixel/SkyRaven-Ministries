@@ -43,6 +43,31 @@ export default function SkyRavenApp() {
   const [adminPasscode, setAdminPasscode] = useState('SkyRaven');
   const [showPasscodePrompt, setShowPasscodePrompt] = useState(false);
   const [familiesSupported, setFamiliesSupported] = useState(0);
+  const [stripeBalance, setStripeBalance] = useState(0);
+  const [loadingBalance, setLoadingBalance] = useState(false);
+
+  // Fetch Stripe balance on mount and when view changes to home
+  useState(() => {
+    if (view === 'home' && user) {
+      fetchStripeBalance();
+    }
+  });
+
+  const fetchStripeBalance = async () => {
+    setLoadingBalance(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/skyraven-ministries/us-central1';
+      const response = await fetch(`${apiUrl}/getBalance`);
+      if (response.ok) {
+        const data = await response.json();
+        setStripeBalance(data.available || 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch balance:', error);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
 
   const handleLogin = () => {
     setUser({ name: "Guest", role: "Supporter" });
@@ -320,12 +345,14 @@ function HomeScreen({ onChangeView, projects, ministryGoals, familiesSupported }
           <div className="flex items-center gap-2 mb-4">
             <span className="bg-white/20 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-white">Total Raised</span>
           </div>
-          <div className="text-5xl font-black text-white mb-2">$0</div>
+          <div className="text-5xl font-black text-white mb-2">
+            {loadingBalance ? '...' : `$${stripeBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          </div>
           <div className="h-2 bg-black/20 rounded-full w-full overflow-hidden mb-2">
-            <div className="h-full bg-white w-[0%]"></div>
+            <div className="h-full bg-white" style={{ width: `${Math.min((stripeBalance / 190000) * 100, 100)}%` }}></div>
           </div>
           <div className="flex justify-between text-xs font-medium text-sky-100">
-            <span>0% of Annual Goal</span>
+            <span>{Math.round((stripeBalance / 190000) * 100)}% of Annual Goal</span>
             <span>Goal: $190k</span>
           </div>
         </div>

@@ -382,3 +382,43 @@ exports.health = functions.https.onRequest((req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+/**
+ * Get Stripe Account Balance
+ * GET /getBalance
+ */
+exports.getBalance = functions.https.onRequest(async (req, res) => {
+  corsHandler(req, res, async () => {
+    try {
+      if (req.method !== 'GET') {
+        return res.status(405).json({ error: 'Method not allowed' });
+      }
+
+      // Fetch balance from Stripe
+      const balance = await stripe.balance.retrieve();
+
+      // Calculate total available balance (sum all currencies)
+      const totalAvailable = balance.available.reduce((sum, curr) => {
+        return sum + curr.amount;
+      }, 0);
+
+      // Calculate total pending balance
+      const totalPending = balance.pending.reduce((sum, curr) => {
+        return sum + curr.amount;
+      }, 0);
+
+      res.json({
+        available: totalAvailable / 100, // Convert from cents to dollars
+        pending: totalPending / 100,
+        currency: balance.available[0]?.currency || 'usd',
+        details: balance
+      });
+    } catch (error) {
+      console.error('Balance retrieval failed:', error);
+      res.status(500).json({
+        error: 'Failed to retrieve balance',
+        message: error.message,
+      });
+    }
+  });
+});
