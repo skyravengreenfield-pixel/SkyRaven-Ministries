@@ -214,7 +214,8 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
       }
       setLoading(false);
     } catch (err: any) {
-      setError(err.message || 'Authentication failed');
+      console.error('Authentication error:', err);
+      setError(err.message || 'Authentication failed. Please try again.');
       setLoading(false);
     }
   };

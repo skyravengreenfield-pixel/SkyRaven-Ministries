@@ -152,7 +152,7 @@ class FirebaseAuthService {
     const errorMessages: Record<string, string> = {
       'auth/email-already-in-use': 'This email is already registered.',
       'auth/invalid-email': 'Invalid email address.',
-      'auth/operation-not-allowed': 'Operation not allowed.',
+      'auth/operation-not-allowed': 'Email/Password authentication is not enabled. Please contact the administrator.',
       'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
       'auth/user-disabled': 'This account has been disabled.',
       'auth/user-not-found': 'No account found with this email.',
@@ -161,7 +161,9 @@ class FirebaseAuthService {
       'auth/network-request-failed': 'Network error. Please check your connection.',
     };
 
-    return new Error(errorMessages[errorCode] || 'Authentication failed. Please try again.');
+    const message = errorMessages[errorCode] || `Authentication failed: ${errorCode || 'Unknown error'}`;
+    logger.error('Auth error handled', { errorCode, message });
+    return new Error(message);
   }
 }
 
