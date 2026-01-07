@@ -41,6 +41,11 @@ class FirebaseAuthService {
       logger.info('User signed in successfully', { uid: userCredential.user.uid });
       return this.mapFirebaseUser(userCredential.user);
     } catch (error: any) {
+      console.error('Sign in error details:', {
+        code: error.code,
+        message: error.message,
+        fullError: error
+      });
       logger.error('Sign in failed', { error });
       throw this.handleAuthError(error);
     }
@@ -59,6 +64,11 @@ class FirebaseAuthService {
       logger.info('User signed up successfully', { uid: userCredential.user.uid });
       return this.mapFirebaseUser(userCredential.user);
     } catch (error: any) {
+      console.error('Sign up error details:', {
+        code: error.code,
+        message: error.message,
+        fullError: error
+      });
       logger.error('Sign up failed', { error });
       throw this.handleAuthError(error);
     }
@@ -161,7 +171,8 @@ class FirebaseAuthService {
       'auth/network-request-failed': 'Network error. Please check your connection.',
     };
 
-    const message = errorMessages[errorCode] || `Authentication failed: ${errorCode || 'Unknown error'}`;
+    const message = errorMessages[errorCode] || `Authentication failed: ${error.message || errorCode || 'Unknown error'}`;
+    console.error('Auth error handled:', { errorCode, errorMessage: error.message, message });
     logger.error('Auth error handled', { errorCode, message });
     return new Error(message);
   }
