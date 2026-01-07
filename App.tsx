@@ -143,7 +143,7 @@ export default function SkyRavenApp() {
           {view !== 'auth' && (
             <div className="flex-1 flex flex-col h-full">
               <main className="flex-1 overflow-y-auto no-scrollbar pb-24">
-                {view === 'home' && <HomeScreen onChangeView={setView} projects={projects} ministryGoals={ministryGoals} familiesSupported={familiesSupported} />}
+                {view === 'home' && <HomeScreen onChangeView={setView} projects={projects} ministryGoals={ministryGoals} familiesSupported={familiesSupported} stripeBalance={stripeBalance} loadingBalance={loadingBalance} />}
                 {view === 'donate' && <DonateScreen onBack={() => setView('home')} projects={projects} />}
                 {view === 'expenses' && <ExpensesScreen />}
                 {view === 'documents' && <DocumentsScreen onBack={() => setView('home')} />}
@@ -311,7 +311,7 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
 // ==========================================
 // 2. HOME SCREEN (Dashboard)
 // ==========================================
-function HomeScreen({ onChangeView, projects, ministryGoals, familiesSupported }: { onChangeView: (view: string) => void; projects: Project[]; ministryGoals: MinistryGoal[]; familiesSupported: number }) {
+function HomeScreen({ onChangeView, projects, ministryGoals, familiesSupported, stripeBalance, loadingBalance }: { onChangeView: (view: string) => void; projects: Project[]; ministryGoals: MinistryGoal[]; familiesSupported: number; stripeBalance: number; loadingBalance: boolean }) {
   return (
     <div className="p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
