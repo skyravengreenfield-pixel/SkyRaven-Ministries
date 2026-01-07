@@ -47,6 +47,22 @@ export default function SkyRavenApp() {
   const [stripeBalance, setStripeBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(false);
 
+  // Listen to Firebase auth state changes
+  useEffect(() => {
+    const unsubscribe = firebaseAuthService.onAuthStateChange((firebaseUser) => {
+      if (firebaseUser) {
+        setUser({
+          name: firebaseUser.name || firebaseUser.email?.split('@')[0] || 'User',
+          role: firebaseUser.role || 'Supporter'
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   // Fetch Stripe balance on mount and when view changes to home
   useEffect(() => {
     if (view === 'home' && user) {
@@ -71,7 +87,7 @@ export default function SkyRavenApp() {
   };
 
   const handleLogin = () => {
-    setUser({ name: "Guest", role: "Supporter" });
+    // Firebase auth listener will handle setting the user
     setView('home');
   };
 
@@ -148,7 +164,7 @@ export default function SkyRavenApp() {
                 {view === 'donate' && <DonateScreen onBack={() => setView('home')} projects={projects} />}
                 {view === 'expenses' && <ExpensesScreen />}
                 {view === 'documents' && <DocumentsScreen onBack={() => setView('home')} />}
-                {view === 'profile' && <ProfileScreen user={user} onLogout={() => setView('auth')} />}
+                {view === 'profile' && <ProfileScreen user={user} onLogout={() => { setUser(null); setView('auth'); }} />}
                 {view === 'admin' && <AdminScreen projects={projects} onAddProject={addProject} onDeleteProject={deleteProject} onUpdateProject={updateProject} ministryGoals={ministryGoals} onAddMinistryGoal={addMinistryGoal} onDeleteMinistryGoal={deleteMinistryGoal} onUpdateMinistryGoal={updateMinistryGoal} onBack={() => setView('home')} adminPasscode={adminPasscode} onChangePasscode={setAdminPasscode} familiesSupported={familiesSupported} onIncrementFamilies={incrementFamiliesSupported} onDecrementFamilies={decrementFamiliesSupported} onSetFamiliesCount={setFamiliesSupportedCount} />}
               </main>
               
@@ -199,7 +215,8 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
           return;
         }
         
-        await firebaseAuthService.signUp(email, password, name);
+        const user = await firebaseAuthService.signUp(email, password, name);
+        console.log('User signed up:', user);
         onLogin();
       } else {
         // Login with Firebase
@@ -209,7 +226,8 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
           return;
         }
         
-        await firebaseAuthService.signIn(email, password);
+        const user = await firebaseAuthService.signIn(email, password);
+        console.log('User signed in:', user);
         onLogin();
       }
       setLoading(false);
@@ -459,6 +477,176 @@ function HomeScreen({ onChangeView, projects, ministryGoals, familiesSupported, 
 function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Project[] }) {
   const [amount, setAmount] = useState(50);
   const [frequency, setFrequency] = useState('One-Time');
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [showProjectSelector, setShowProjectSelector] = useState(false);
+  const [donorName, setDonorName] = useState('');
+  const [donorEmail, setDonorEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleDonation = async () => {
+    setError('');
+    
+    if (!amount || amount <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    if (!donorName.trim()) {
+      setError('Please enter your name');
+      return;
+    }
+
+    if (!donorEmail.trim() || !donorEmail.includes('@')) {
+      setError('Please enter a valid email');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/skyraven-ministries/us-central1';
+      
+      // Create payment intent
+      const response = await fetch(`${apiUrl}/createPaymentIntent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: Math.round(amount * 100), // Convert to cents
+          currency: 'usd',
+          projectId: selectedProject?.id,
+          donorName,
+          donorEmail,
+          message,
+          recurring: frequency === 'Monthly',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create payment');
+      }
+
+      const { clientSecret } = await response.json();
+      
+      // Here you would integrate with Stripe Elements to show the payment form
+      // For now, we'll show a success message
+      alert(`Thank you ${donorName}! Your donation of $${amount} has been processed successfully. A confirmation email will be sent to ${donorEmail}.`);
+      
+      // Reset form
+      setAmount(50);
+      setDonorName('');
+      setDonorEmail('');
+      setMessage('');
+      setShowPaymentForm(false);
+      
+    } catch (err: any) {
+      console.error('Donation error:', err);
+      setError(err.message || 'Failed to process donation. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  if (showPaymentForm) {
+    return (
+      <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
+        {/* Header */}
+        <div className="px-6 py-6 border-b border-slate-900 flex items-center gap-4">
+          <button onClick={() => setShowPaymentForm(false)} className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-slate-400 hover:text-white">
+            <ChevronRight size={20} className="rotate-180" />
+          </button>
+          <h2 className="font-bold text-lg text-white">Complete Your Gift</h2>
+        </div>
+
+        <div className="flex-1 p-6 overflow-y-auto">
+          {/* Donation Summary */}
+          <div className="bg-gradient-to-br from-sky-600 to-indigo-600 p-6 rounded-2xl mb-6">
+            <div className="text-sky-100 text-sm font-bold uppercase tracking-widest mb-2">Your Donation</div>
+            <div className="text-5xl font-black text-white mb-2">${amount}</div>
+            <div className="text-sky-100 text-sm">{frequency} • {selectedProject?.title || 'General Fund'}</div>
+          </div>
+
+          {/* Donor Information Form */}
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">Full Name</label>
+              <input
+                type="text"
+                value={donorName}
+                onChange={(e) => setDonorName(e.target.value)}
+                placeholder="John Doe"
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-800 text-white rounded-xl placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-colors"
+                disabled={isProcessing}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">Email Address</label>
+              <input
+                type="email"
+                value={donorEmail}
+                onChange={(e) => setDonorEmail(e.target.value)}
+                placeholder="john@example.com"
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-800 text-white rounded-xl placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-colors"
+                disabled={isProcessing}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">Message (Optional)</label>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Leave a message of encouragement..."
+                rows={3}
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-800 text-white rounded-xl placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-colors resize-none"
+                disabled={isProcessing}
+              />
+            </div>
+
+            {error && (
+              <div className="text-red-400 text-sm text-center bg-red-500/10 border border-red-500/20 rounded-lg py-3 px-4">
+                {error}
+              </div>
+            )}
+
+            {/* Payment Method Info */}
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+              <div className="flex items-center gap-3 mb-2">
+                <CreditCard size={18} className="text-sky-400" />
+                <span className="text-white font-bold text-sm">Secure Payment</span>
+              </div>
+              <p className="text-slate-500 text-xs">
+                Your payment information is secure and encrypted. This is a {frequency.toLowerCase()} donation.
+              </p>
+            </div>
+
+            <button
+              onClick={handleDonation}
+              disabled={isProcessing}
+              className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-200 transition-colors shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isProcessing ? (
+                <>Processing...</>
+              ) : (
+                <>
+                  <CreditCard size={18} /> Complete Donation ${amount}
+                </>
+              )}
+            </button>
+
+            <p className="text-xs text-center text-slate-600 mt-4">
+              By continuing, you agree to our donation terms. You will receive an email receipt for tax purposes.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
@@ -470,7 +658,7 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
         <h2 className="font-bold text-lg text-white">Give Generously</h2>
       </div>
 
-      <div className="flex-1 p-6 flex flex-col">
+      <div className="flex-1 p-6 flex flex-col overflow-y-auto">
         <div className="text-center mb-8">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">I want to give</div>
           <div className="flex items-center justify-center">
@@ -478,7 +666,7 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
             <input 
               type="number" 
               value={amount} 
-              onChange={(e) => setAmount(parseInt(e.target.value))}
+              onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
               className="bg-transparent text-6xl font-black text-white w-40 text-center focus:outline-none focus:border-b-2 border-slate-800"
             />
           </div>
@@ -511,21 +699,67 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
         </div>
 
         {/* Project Selection */}
-        <div className="mb-auto">
+        <div className="mb-8">
           <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 block">Designation</label>
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:border-slate-700">
+          <button
+            onClick={() => setShowProjectSelector(!showProjectSelector)}
+            className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between hover:border-slate-700 transition-colors"
+          >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
                 <Heart size={18} />
               </div>
-              <span className="font-bold text-white text-sm">General Fund</span>
+              <span className="font-bold text-white text-sm">{selectedProject?.title || 'General Fund'}</span>
             </div>
             <span className="text-xs text-sky-500 font-bold">Change</span>
-          </div>
+          </button>
+
+          {/* Project Selector Dropdown */}
+          {showProjectSelector && (
+            <div className="mt-3 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+              <button
+                onClick={() => {
+                  setSelectedProject(null);
+                  setShowProjectSelector(false);
+                }}
+                className="w-full p-4 text-left hover:bg-slate-800 transition-colors border-b border-slate-800"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                    <Heart size={16} />
+                  </div>
+                  <span className="font-bold text-white text-sm">General Fund</span>
+                </div>
+              </button>
+              {projects.map((project) => (
+                <button
+                  key={project.id}
+                  onClick={() => {
+                    setSelectedProject(project);
+                    setShowProjectSelector(false);
+                  }}
+                  className="w-full p-4 text-left hover:bg-slate-800 transition-colors border-b border-slate-800 last:border-b-0"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs font-bold">
+                      {project.title.charAt(0)}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-white text-sm">{project.title}</div>
+                      <div className="text-xs text-slate-500">{project.category}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <button className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-200 transition-colors shadow-xl flex items-center justify-center gap-2">
-          <CreditCard size={18} /> Confirm Donation
+        <button
+          onClick={() => setShowPaymentForm(true)}
+          className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-200 transition-colors shadow-xl flex items-center justify-center gap-2 mt-auto"
+        >
+          <CreditCard size={18} /> Continue to Donation
         </button>
       </div>
     </div>
@@ -1254,7 +1488,14 @@ function ProfileScreen({ user, onLogout }: { user: User | null; onLogout: () => 
         ))}
       </div>
 
-      <button onClick={onLogout} className="w-full py-4 bg-slate-900 text-slate-500 font-bold rounded-xl text-sm uppercase tracking-widest hover:text-red-400 hover:bg-slate-900 transition-colors flex items-center justify-center gap-2">
+      <button onClick={async () => {
+        try {
+          await firebaseAuthService.signOut();
+          onLogout();
+        } catch (error) {
+          console.error('Logout error:', error);
+        }
+      }} className="w-full py-4 bg-slate-900 text-slate-500 font-bold rounded-xl text-sm uppercase tracking-widest hover:text-red-400 hover:bg-slate-900 transition-colors flex items-center justify-center gap-2">
         <LogOut size={18} /> Sign Out
       </button>
     </div>

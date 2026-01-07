@@ -39,9 +39,10 @@ export function initializeFirebase(): void {
     });
 
     if (!firebaseConfig.apiKey) {
-      logger.warn('Firebase configuration missing - running without Firebase');
-      console.error('Firebase API key is missing! Check your .env.local file.');
-      return;
+      const errorMsg = 'Firebase API key is missing! Check your .env.local file.';
+      logger.error(errorMsg);
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     if (!app) {
