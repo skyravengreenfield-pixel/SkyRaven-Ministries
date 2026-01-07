@@ -147,6 +147,59 @@ export default function SkyRavenApp() {
 // 1. AUTH SCREEN
 // ==========================================
 function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLogin: () => void }) {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      if (isSignUp) {
+        // Sign up logic - would connect to Firebase Auth
+        if (!name || !email || !password) {
+          setError('Please fill in all fields');
+          setLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setError('Password must be at least 6 characters');
+          setLoading(false);
+          return;
+        }
+        // TODO: Implement Firebase signUp from firebaseAuth.ts
+        console.log('Sign up:', { name, email, password });
+        // Simulate success
+        setTimeout(() => {
+          onLogin();
+          setLoading(false);
+        }, 500);
+      } else {
+        // Login logic
+        if (!email || !password) {
+          setError('Please enter email and password');
+          setLoading(false);
+          return;
+        }
+        // TODO: Implement Firebase signIn from firebaseAuth.ts
+        console.log('Login:', { email, password });
+        // Simulate success
+        setTimeout(() => {
+          onLogin();
+          setLoading(false);
+        }, 500);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed');
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col p-8 justify-end relative">
       <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-sky-900/20 to-transparent"></div>
@@ -159,19 +212,65 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
         <p className="text-xl text-slate-400 font-light">Transparency in Ministry.</p>
       </div>
 
-      <div className="space-y-4 relative z-10 mb-8">
+      <div className="relative z-10 mb-8">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {isSignUp && (
+            <input
+              type="text"
+              placeholder="Full Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-4 bg-slate-900 border border-slate-800 text-white rounded-xl placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-colors"
+              disabled={loading}
+            />
+          )}
+          <input
+            type="email"
+            placeholder="Email Address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-4 bg-slate-900 border border-slate-800 text-white rounded-xl placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-colors"
+            disabled={loading}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-4 bg-slate-900 border border-slate-800 text-white rounded-xl placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-colors"
+            disabled={loading}
+          />
+          
+          {error && (
+            <div className="text-red-400 text-sm text-center bg-red-500/10 border border-red-500/20 rounded-lg py-2">
+              {error}
+            </div>
+          )}
+
+          <button 
+            type="submit"
+            disabled={loading}
+            className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-200 transition-colors shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
+          </button>
+        </form>
+
         <button 
-          onClick={onLogin}
-          className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-200 transition-colors shadow-xl"
+          onClick={() => {
+            setIsSignUp(!isSignUp);
+            setError('');
+          }}
+          disabled={loading}
+          className="w-full mt-4 py-4 bg-slate-900 border border-slate-800 text-white font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-800 transition-colors disabled:opacity-50"
         >
-          Sign In
+          {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
         </button>
-        <button className="w-full py-4 bg-slate-900 border border-slate-800 text-white font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-800 transition-colors">
-          Create Account
-        </button>
+
         <button 
           onClick={onAdminLogin}
-          className="w-full py-3 bg-sky-600/20 border border-sky-600/40 text-sky-400 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-sky-600/30 transition-colors"
+          disabled={loading}
+          className="w-full mt-4 py-3 bg-sky-600/20 border border-sky-600/40 text-sky-400 font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-sky-600/30 transition-colors disabled:opacity-50"
         >
           Admin Dashboard
         </button>
