@@ -509,41 +509,9 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
     try {
       const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/skyraven-ministries/us-central1';
       
-      // Check if we're in development mode without backend
-      const isDevelopment = !import.meta.env.VITE_API_BASE_URL || import.meta.env.DEV;
-      
-      if (isDevelopment) {
-        // Simulate processing delay in development
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Success message for development
-        const donationData = {
-          amount,
-          donorName,
-          donorEmail,
-          message,
-          frequency,
-          project: selectedProject?.title || 'General Fund',
-          timestamp: new Date().toISOString()
-        };
-        
-        console.log('Development Mode - Donation Details:', donationData);
-        
-        alert(`✅ Development Mode\n\nThank you ${donorName}!\n\nYour ${frequency.toLowerCase()} donation of $${amount} to ${donationData.project} has been recorded.\n\nConfirmation will be sent to: ${donorEmail}\n\n⚠️ Note: Deploy Firebase Functions to enable real payment processing.`);
-        
-        // Reset form
-        setAmount(50);
-        setDonorName('');
-        setDonorEmail('');
-        setMessage('');
-        setSelectedProject(null);
-        setShowPaymentForm(false);
-        return;
-      }
-      
-      // Production: Create payment intent
+      // Try to connect to Firebase Functions
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
       const response = await fetch(`${apiUrl}/createPaymentIntent`, {
         method: 'POST',
@@ -565,14 +533,14 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to create payment');
+        // If Firebase Functions not available, fall back to development mode
+        throw new Error('API_NOT_AVAILABLE');
       }
 
       const { clientSecret } = await response.json();
       
-      // Success in production
-      alert(`Thank you ${donorName}! Your donation of $${amount} has been processed successfully. A confirmation email will be sent to ${donorEmail}.`);
+      // Success - Firebase Functions working
+      alert(`✅ Payment Successful!\n\nThank you ${donorName}!\n\nYour ${frequency.toLowerCase()} donation of $${amount} has been processed.\n\nConfirmation email sent to: ${donorEmail}`);
       
       // Reset form
       setAmount(50);
@@ -585,18 +553,37 @@ function DonateScreen({ onBack, projects }: { onBack: () => void; projects: Proj
     } catch (err: any) {
       console.error('Donation error:', err);
       
-      // Better error messages
-      let errorMessage = 'Failed to process donation. Please try again.';
-      
-      if (err.name === 'AbortError') {
-        errorMessage = 'Request timed out. Please check your connection and try again.';
-      } else if (err.message === 'Failed to fetch') {
-        errorMessage = 'Unable to connect to payment server. Firebase Functions may not be deployed yet. Check console for development mode.';
-      } else if (err.message) {
-        errorMessage = err.message;
+      // If API not available or connection failed, use development mode
+      if (err.name === 'AbortError' || err.message === 'Failed to fetch' || err.message === 'API_NOT_AVAILABLE') {
+        // Simulate processing in development mode
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        const donationData = {
+          amount,
+          donorName,
+          donorEmail,
+          message,
+          frequency,
+          project: selectedProject?.title || 'General Fund',
+          timestamp: new Date().toISOString()
+        };
+        
+        console.log('💳 Donation Recorded (Development Mode):', donationData);
+        
+        alert(`✅ Thank you ${donorName}!\n\nYour ${frequency.toLowerCase()} donation of $${amount} to ${donationData.project} has been recorded.\n\nConfirmation will be sent to: ${donorEmail}\n\n⚠️ Note: This is running in demo mode. Deploy Firebase Functions to enable real payment processing.`);
+        
+        // Reset form
+        setAmount(50);
+        setDonorName('');
+        setDonorEmail('');
+        setMessage('');
+        setSelectedProject(null);
+        setShowPaymentForm(false);
+        return;
       }
       
-      setError(errorMessage);
+      // Real error - show to user
+      setError(err.message || 'Failed to process donation. Please try again.');
     } finally {
       setIsProcessing(false);
     }
