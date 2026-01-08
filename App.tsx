@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Heart, PieChart, User, Home, Plus, ChevronRight, ArrowUpRight, CreditCard, Check, LogOut, FileText, Bell } from 'lucide-react';
+import { Heart, PieChart, User, Home, Plus, ChevronRight, ArrowUpRight, CreditCard, Check, LogOut, FileText, Bell, Share2, Phone, Mail, Copy } from 'lucide-react';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import { DocumentsScreen } from './src/screens/DocumentsScreen';
 import { firebaseAuthService } from './src/services/firebaseAuth';
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, orderBy } from 'firebase/firestore';
 
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
@@ -67,6 +68,7 @@ const INITIAL_MINISTRY_GOALS: MinistryGoal[] = [];
 interface User {
   name: string;
   role: string;
+  email?: string;
 }
 
 interface Project {
@@ -88,17 +90,163 @@ interface MinistryGoal {
   color: string;
 }
 
+interface Expense {
+  id: number;
+  title: string;
+  amount: number;
+  category: string;
+  date: string;
+  status: 'Verified' | 'Pending';
+}
+
+interface PrayerRequest {
+  id: number;
+  name: string;
+  email: string;
+  request: string;
+  isAnonymous: boolean;
+  createdAt: string;
+  prayers: number;
+}
+
+interface Subscription {
+  id: string;
+  subscriptionId: string;
+  customerId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  donorName: string;
+  donorEmail: string;
+  projectId?: string | null;
+  createdAt: any;
+}
+
 export default function SkyRavenApp() {
   const [view, setView] = useState('auth'); // auth, home, donate, expenses, profile, admin, documents
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [ministryGoals, setMinistryGoals] = useState<MinistryGoal[]>(INITIAL_MINISTRY_GOALS);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>([]);
   const [adminPasscode, setAdminPasscode] = useState('SkyRaven');
   const [showPasscodePrompt, setShowPasscodePrompt] = useState(false);
   const [familiesSupported, setFamiliesSupported] = useState(0);
   const [stripeBalance, setStripeBalance] = useState(0);
   const [stripePending, setStripePending] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(false);
+
+  const db = getFirestore();
+
+  // Listen to Firebase Auth state changes
+  useEffect(() => {
+    const unsubscribe = firebaseAuthService.onAuthStateChange((authUser) => {
+      if (authUser) {
+        console.log('Auth user detected:', authUser);
+        setUser({
+          name: authUser.name,
+          role: authUser.role,
+          email: authUser.email
+        });
+      } else {
+        console.log('No auth user');
+        // Don't clear user if it's the admin (set manually)
+        if (user?.role !== 'Administrator') {
+          setUser(null);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Load projects and goals from Firestore on mount
+  useEffect(() => {
+    loadProjectsFromFirestore();
+    loadGoalsFromFirestore();
+    loadFamiliesSupportedFromFirestore();
+  }, []);
+
+  const loadProjectsFromFirestore = async () => {
+    try {
+      console.log('📥 Loading projects from Firestore...');
+      const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const loadedProjects: Project[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        console.log('Project loaded:', doc.id, data);
+        loadedProjects.push({ id: doc.id as any, ...data } as Project);
+      });
+      console.log(`✅ Loaded ${loadedProjects.length} projects from Firestore`);
+      setProjects(loadedProjects);
+    } catch (error) {
+      console.error('❌ Error loading projects:', error);
+      // If there's an error (like missing index), try loading without orderBy
+      try {
+        const querySnapshot = await getDocs(collection(db, 'projects'));
+        const loadedProjects: Project[] = [];
+        querySnapshot.forEach((doc) => {
+          loadedProjects.push({ id: doc.id as any, ...doc.data() } as Project);
+        });
+        console.log(`✅ Loaded ${loadedProjects.length} projects (fallback)`);
+        setProjects(loadedProjects);
+      } catch (fallbackError) {
+        console.error('❌ Fallback loading also failed:', fallbackError);
+      }
+    }
+  };
+
+  const loadGoalsFromFirestore = async () => {
+    try {
+      console.log('📥 Loading ministry goals from Firestore...');
+      const q = query(collection(db, 'ministryGoals'), orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const loadedGoals: MinistryGoal[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        console.log('Goal loaded:', doc.id, data);
+        loadedGoals.push({ id: doc.id as any, ...data } as MinistryGoal);
+      });
+      console.log(`✅ Loaded ${loadedGoals.length} ministry goals from Firestore`);
+      setMinistryGoals(loadedGoals);
+    } catch (error) {
+      console.error('❌ Error loading goals:', error);
+      // If there's an error (like missing index), try loading without orderBy
+      try {
+        const querySnapshot = await getDocs(collection(db, 'ministryGoals'));
+        const loadedGoals: MinistryGoal[] = [];
+        querySnapshot.forEach((doc) => {
+          loadedGoals.push({ id: doc.id as any, ...doc.data() } as MinistryGoal);
+        });
+        console.log(`✅ Loaded ${loadedGoals.length} goals (fallback)`);
+        setMinistryGoals(loadedGoals);
+      } catch (fallbackError) {
+        console.error('❌ Fallback loading also failed:', fallbackError);
+      }
+    }
+  };
+
+  const loadFamiliesSupportedFromFirestore = async () => {
+    try {
+      console.log('📥 Loading families supported from Firestore...');
+      const querySnapshot = await getDocs(collection(db, 'settings'));
+      let found = false;
+      querySnapshot.forEach((doc) => {
+        if (doc.id === 'familiesSupported') {
+          const count = doc.data().count || 0;
+          console.log('✅ Families supported:', count);
+          setFamiliesSupported(count);
+          found = true;
+        }
+      });
+      if (!found) {
+        console.log('ℹ️ No families supported count found in Firestore, using default (0)');
+      }
+    } catch (error) {
+      console.error('❌ Error loading families supported:', error);
+    }
+  };
 
   // Listen to Firebase auth state changes
   useEffect(() => {
@@ -159,42 +307,216 @@ export default function SkyRavenApp() {
     return false;
   };
 
-  const addProject = (project: Omit<Project, 'id'>) => {
-    const newProject = { ...project, id: projects.length + 1 };
-    setProjects([newProject, ...projects]);
+  const addProject = async (project: Omit<Project, 'id'>) => {
+    try {
+      console.log('📤 Adding new project to Firestore:', project);
+      const docRef = await addDoc(collection(db, 'projects'), {
+        ...project,
+        createdAt: new Date().toISOString()
+      });
+      const newProject = { ...project, id: docRef.id as any };
+      console.log('✅ Project added successfully with ID:', docRef.id);
+      setProjects([newProject, ...projects]);
+      // Reload projects to ensure consistency
+      setTimeout(() => loadProjectsFromFirestore(), 500);
+    } catch (error) {
+      console.error('❌ Error adding project:', error);
+      alert('Failed to add mission. Please check your internet connection and try again.');
+      throw error;
+    }
   };
 
-  const deleteProject = (projectId: number) => {
-    setProjects(projects.filter(p => p.id !== projectId));
+  const deleteProject = async (projectId: number) => {
+    try {
+      console.log('🗑️ Deleting project:', projectId);
+      await deleteDoc(doc(db, 'projects', projectId.toString()));
+      console.log('✅ Project deleted successfully');
+      setProjects(projects.filter(p => p.id !== projectId));
+    } catch (error) {
+      console.error('❌ Error deleting project:', error);
+      alert('Failed to delete mission. Please check your internet connection and try again.');
+      throw error;
+    }
   };
 
-  const updateProject = (projectId: number, updates: Partial<Project>) => {
-    setProjects(projects.map(p => p.id === projectId ? { ...p, ...updates } : p));
+  const updateProject = async (projectId: number, updates: Partial<Project>) => {
+    try {
+      console.log('✏️ Updating project:', projectId, updates);
+      await updateDoc(doc(db, 'projects', projectId.toString()), updates);
+      console.log('✅ Project updated successfully');
+      setProjects(projects.map(p => p.id === projectId ? { ...p, ...updates } : p));
+      // Reload projects to ensure consistency
+      setTimeout(() => loadProjectsFromFirestore(), 500);
+    } catch (error) {
+      console.error('❌ Error updating project:', error);
+      alert('Failed to update mission. Please check your internet connection and try again.');
+      throw error;
+    }
   };
 
-  const addMinistryGoal = (goal: Omit<MinistryGoal, 'id'>) => {
-    const newGoal = { ...goal, id: ministryGoals.length + 1 };
-    setMinistryGoals([newGoal, ...ministryGoals]);
+  const addMinistryGoal = async (goal: Omit<MinistryGoal, 'id'>) => {
+    try {
+      console.log('📤 Adding new ministry goal to Firestore:', goal);
+      const docRef = await addDoc(collection(db, 'ministryGoals'), {
+        ...goal,
+        createdAt: new Date().toISOString()
+      });
+      const newGoal = { ...goal, id: docRef.id as any };
+      console.log('✅ Ministry goal added successfully with ID:', docRef.id);
+      setMinistryGoals([newGoal, ...ministryGoals]);
+      // Reload goals to ensure consistency
+      setTimeout(() => loadGoalsFromFirestore(), 500);
+    } catch (error) {
+      console.error('❌ Error adding goal:', error);
+      alert('Failed to add goal. Please check your internet connection and try again.');
+      throw error;
+    }
   };
 
-  const deleteMinistryGoal = (goalId: number) => {
-    setMinistryGoals(ministryGoals.filter(g => g.id !== goalId));
+  const deleteMinistryGoal = async (goalId: number) => {
+    try {
+      console.log('🗑️ Deleting ministry goal:', goalId);
+      await deleteDoc(doc(db, 'ministryGoals', goalId.toString()));
+      console.log('✅ Ministry goal deleted successfully');
+      setMinistryGoals(ministryGoals.filter(g => g.id !== goalId));
+    } catch (error) {
+      console.error('❌ Error deleting goal:', error);
+      alert('Failed to delete goal. Please check your internet connection and try again.');
+      throw error;
+    }
   };
 
-  const updateMinistryGoal = (goalId: number, updates: Partial<MinistryGoal>) => {
-    setMinistryGoals(ministryGoals.map(g => g.id === goalId ? { ...g, ...updates } : g));
+  const updateMinistryGoal = async (goalId: number, updates: Partial<MinistryGoal>) => {
+    try {
+      console.log('✏️ Updating ministry goal:', goalId, updates);
+      await updateDoc(doc(db, 'ministryGoals', goalId.toString()), updates);
+      console.log('✅ Ministry goal updated successfully');
+      setMinistryGoals(ministryGoals.map(g => g.id === goalId ? { ...g, ...updates } : g));
+      // Reload goals to ensure consistency
+      setTimeout(() => loadGoalsFromFirestore(), 500);
+    } catch (error) {
+      console.error('❌ Error updating goal:', error);
+      alert('Failed to update goal. Please check your internet connection and try again.');
+      throw error;
+    }
   };
 
-  const incrementFamiliesSupported = () => {
-    setFamiliesSupported(prev => prev + 1);
+  const addExpense = async (expense: Omit<Expense, 'id'>) => {
+    try {
+      console.log('📤 Adding new expense to Firestore:', expense);
+      const docRef = await addDoc(collection(db, 'expenses'), {
+        ...expense,
+        createdAt: new Date().toISOString()
+      });
+      const newExpense = { ...expense, id: docRef.id as any };
+      console.log('✅ Expense added successfully with ID:', docRef.id);
+      setExpenses([newExpense, ...expenses]);
+    } catch (error) {
+      console.error('❌ Error adding expense:', error);
+      alert('Failed to add expense. Please check your internet connection and try again.');
+      throw error;
+    }
   };
 
-  const decrementFamiliesSupported = () => {
-    setFamiliesSupported(prev => Math.max(0, prev - 1));
+  const deleteExpense = async (expenseId: number) => {
+    try {
+      console.log('🗑️ Deleting expense:', expenseId);
+      await deleteDoc(doc(db, 'expenses', expenseId.toString()));
+      console.log('✅ Expense deleted successfully');
+      setExpenses(expenses.filter(e => e.id !== expenseId));
+    } catch (error) {
+      console.error('❌ Error deleting expense:', error);
+      alert('Failed to delete expense. Please check your internet connection and try again.');
+      throw error;
+    }
   };
 
-  const setFamiliesSupportedCount = (count: number) => {
-    setFamiliesSupported(Math.max(0, count));
+  const updateExpense = async (expenseId: number, updates: Partial<Expense>) => {
+    try {
+      console.log('✏️ Updating expense:', expenseId, updates);
+      await updateDoc(doc(db, 'expenses', expenseId.toString()), updates);
+      console.log('✅ Expense updated successfully');
+      setExpenses(expenses.map(e => e.id === expenseId ? { ...e, ...updates } : e));
+    } catch (error) {
+      console.error('❌ Error updating expense:', error);
+      alert('Failed to update expense. Please check your internet connection and try again.');
+      throw error;
+    }
+  };
+
+  const addPrayerRequest = async (prayerRequest: Omit<PrayerRequest, 'id' | 'prayers'>) => {
+    try {
+      console.log('📤 Adding new prayer request to Firestore:', prayerRequest);
+      const docRef = await addDoc(collection(db, 'prayerRequests'), {
+        ...prayerRequest,
+        prayers: 0,
+        createdAt: new Date().toISOString()
+      });
+      const newRequest = { ...prayerRequest, id: docRef.id as any, prayers: 0 };
+      console.log('✅ Prayer request added successfully with ID:', docRef.id);
+      setPrayerRequests([newRequest, ...prayerRequests]);
+    } catch (error) {
+      console.error('❌ Error adding prayer request:', error);
+      alert('Failed to add prayer request. Please check your internet connection and try again.');
+      throw error;
+    }
+  };
+
+  const incrementPrayers = async (requestId: number) => {
+    try {
+      const request = prayerRequests.find(r => r.id === requestId);
+      if (!request) return;
+      
+      const newPrayerCount = request.prayers + 1;
+      await updateDoc(doc(db, 'prayerRequests', requestId.toString()), { prayers: newPrayerCount });
+      setPrayerRequests(prayerRequests.map(r => r.id === requestId ? { ...r, prayers: newPrayerCount } : r));
+    } catch (error) {
+      console.error('❌ Error incrementing prayers:', error);
+    }
+  };
+
+  const incrementFamiliesSupported = async () => {
+    const newCount = familiesSupported + 1;
+    console.log('⬆️ Incrementing families supported to:', newCount);
+    await setFamiliesSupportedCount(newCount);
+  };
+
+  const decrementFamiliesSupported = async () => {
+    const newCount = Math.max(0, familiesSupported - 1);
+    console.log('⬇️ Decrementing families supported to:', newCount);
+    await setFamiliesSupportedCount(newCount);
+  };
+
+  const setFamiliesSupportedCount = async (count: number) => {
+    try {
+      const newCount = Math.max(0, count);
+      console.log('✏️ Setting families supported count to:', newCount);
+      
+      // Try to update first
+      try {
+        await updateDoc(doc(db, 'settings', 'familiesSupported'), { 
+          count: newCount,
+          updatedAt: new Date().toISOString()
+        });
+        console.log('✅ Families supported count updated successfully');
+      } catch (updateError) {
+        // If document doesn't exist, create it with setDoc
+        console.log('ℹ️ Creating new familiesSupported document');
+        const { setDoc } = await import('firebase/firestore');
+        await setDoc(doc(db, 'settings', 'familiesSupported'), { 
+          count: newCount,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        console.log('✅ Families supported document created successfully');
+      }
+      
+      setFamiliesSupported(newCount);
+    } catch (error) {
+      console.error('❌ Error updating families supported:', error);
+      alert('Failed to update families count. Please check your internet connection and try again.');
+      throw error;
+    }
   };
 
   return (
@@ -216,13 +538,13 @@ export default function SkyRavenApp() {
               <main className="flex-1 overflow-y-auto no-scrollbar pb-24">
                 {view === 'home' && <HomeScreen onChangeView={setView} projects={projects} ministryGoals={ministryGoals} familiesSupported={familiesSupported} stripeBalance={stripeBalance} stripePending={stripePending} loadingBalance={loadingBalance} />}
                 {view === 'donate' && <DonateScreen onBack={() => setView('home')} projects={projects} onPaymentSuccess={fetchStripeBalance} />}
-                {view === 'expenses' && <ExpensesScreen />}
+                {view === 'expenses' && <ExpensesScreen expenses={expenses} />}
                 {view === 'documents' && <DocumentsScreen onBack={() => setView('home')} />}
-                {view === 'profile' && <ProfileScreen user={user} onLogout={() => { setUser(null); setView('auth'); }} />}
-                {view === 'admin' && <AdminScreen projects={projects} onAddProject={addProject} onDeleteProject={deleteProject} onUpdateProject={updateProject} ministryGoals={ministryGoals} onAddMinistryGoal={addMinistryGoal} onDeleteMinistryGoal={deleteMinistryGoal} onUpdateMinistryGoal={updateMinistryGoal} onBack={() => setView('home')} adminPasscode={adminPasscode} onChangePasscode={setAdminPasscode} familiesSupported={familiesSupported} onIncrementFamilies={incrementFamiliesSupported} onDecrementFamilies={decrementFamiliesSupported} onSetFamiliesCount={setFamiliesSupportedCount} />}
+                {view === 'profile' && <ProfileScreen user={user} onLogout={() => { setUser(null); setView('auth'); }} prayerRequests={prayerRequests} onAddPrayerRequest={addPrayerRequest} onIncrementPrayers={incrementPrayers} />}
+                {view === 'admin' && <AdminScreen projects={projects} onAddProject={addProject} onDeleteProject={deleteProject} onUpdateProject={updateProject} ministryGoals={ministryGoals} onAddMinistryGoal={addMinistryGoal} onDeleteMinistryGoal={deleteMinistryGoal} onUpdateMinistryGoal={updateMinistryGoal} expenses={expenses} onAddExpense={addExpense} onDeleteExpense={deleteExpense} onUpdateExpense={updateExpense} onLogout={async () => { await firebaseAuthService.signOut(); setUser(null); setView('auth'); }} adminPasscode={adminPasscode} onChangePasscode={setAdminPasscode} familiesSupported={familiesSupported} onIncrementFamilies={incrementFamiliesSupported} onDecrementFamilies={decrementFamiliesSupported} onSetFamiliesCount={setFamiliesSupportedCount} />}
               </main>
               
-              <BottomNav current={view} onChange={setView} />
+              {view !== 'admin' && <BottomNav current={view} onChange={setView} />}
             </div>
           )}
 
@@ -760,14 +1082,18 @@ function DonateScreen({ onBack, projects, onPaymentSuccess }: { onBack: () => vo
       <div className="flex-1 p-6 flex flex-col overflow-y-auto">
         <div className="text-center mb-8">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">I want to give</div>
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center mb-2">
             <span className="text-4xl text-slate-500 mr-2">$</span>
             <input 
               type="number" 
               value={amount} 
               onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
-              className="bg-transparent text-6xl font-black text-white w-40 text-center focus:outline-none focus:border-b-2 border-slate-800"
+              className="bg-transparent text-6xl font-black text-white w-40 text-center focus:outline-none focus:border-b-2 border-slate-800 cursor-pointer hover:text-sky-400 transition-colors"
+              placeholder="50"
             />
+          </div>
+          <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+            <span>✏️</span> Tap amount to enter custom value
           </div>
         </div>
 
@@ -868,8 +1194,9 @@ function DonateScreen({ onBack, projects, onPaymentSuccess }: { onBack: () => vo
 // ==========================================
 // 3. EXPENSES SCREEN (Transparency)
 // ==========================================
-function ExpensesScreen() {
+function ExpensesScreen({ expenses }: { expenses?: Expense[] }) {
   const [filter, setFilter] = useState('All');
+  const expensesList = expenses && expenses.length > 0 ? expenses : EXPENSES;
 
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500">
@@ -893,7 +1220,7 @@ function ExpensesScreen() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 space-y-4">
-        {EXPENSES.filter(e => filter === 'All' || e.category === filter).map((expense) => (
+        {expensesList.filter(e => filter === 'All' || e.category === filter).map((expense) => (
           <div key={expense.id} className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl flex items-start justify-between">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 mt-1">
@@ -935,8 +1262,8 @@ function ExpensesScreen() {
 // ==========================================
 // 4. ADMIN DASHBOARD
 // ==========================================
-function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject, ministryGoals, onAddMinistryGoal, onDeleteMinistryGoal, onUpdateMinistryGoal, onBack, adminPasscode, onChangePasscode, familiesSupported, onIncrementFamilies, onDecrementFamilies, onSetFamiliesCount }: { projects: Project[]; onAddProject: (project: Omit<Project, 'id'>) => void; onDeleteProject: (projectId: number) => void; onUpdateProject: (projectId: number, updates: Partial<Project>) => void; ministryGoals: MinistryGoal[]; onAddMinistryGoal: (goal: Omit<MinistryGoal, 'id'>) => void; onDeleteMinistryGoal: (goalId: number) => void; onUpdateMinistryGoal: (goalId: number, updates: Partial<MinistryGoal>) => void; onBack: () => void; adminPasscode: string; onChangePasscode: (passcode: string) => void; familiesSupported: number; onIncrementFamilies: () => void; onDecrementFamilies: () => void; onSetFamiliesCount: (count: number) => void }) {
-  const [activeTab, setActiveTab] = useState<'missions' | 'goals'>('missions');
+function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject, ministryGoals, onAddMinistryGoal, onDeleteMinistryGoal, onUpdateMinistryGoal, expenses, onAddExpense, onDeleteExpense, onUpdateExpense, onLogout, adminPasscode, onChangePasscode, familiesSupported, onIncrementFamilies, onDecrementFamilies, onSetFamiliesCount }: { projects: Project[]; onAddProject: (project: Omit<Project, 'id'>) => void; onDeleteProject: (projectId: number) => void; onUpdateProject: (projectId: number, updates: Partial<Project>) => void; ministryGoals: MinistryGoal[]; onAddMinistryGoal: (goal: Omit<MinistryGoal, 'id'>) => void; onDeleteMinistryGoal: (goalId: number) => void; onUpdateMinistryGoal: (goalId: number, updates: Partial<MinistryGoal>) => void; expenses: Expense[]; onAddExpense: (expense: Omit<Expense, 'id'>) => void; onDeleteExpense: (expenseId: number) => void; onUpdateExpense: (expenseId: number, updates: Partial<Expense>) => void; onLogout: () => void; adminPasscode: string; onChangePasscode: (passcode: string) => void; familiesSupported: number; onIncrementFamilies: () => void; onDecrementFamilies: () => void; onSetFamiliesCount: (count: number) => void }) {
+  const [activeTab, setActiveTab] = useState<'missions' | 'goals' | 'ledger'>('missions');
   const [showForm, setShowForm] = useState(false);
   const [showPasscodeForm, setShowPasscodeForm] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
@@ -947,6 +1274,12 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
   const [editGoalTitle, setEditGoalTitle] = useState('');
   const [editGoalDescription, setEditGoalDescription] = useState('');
   const [editGoalIcon, setEditGoalIcon] = useState('');
+  const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
+  const [editExpenseTitle, setEditExpenseTitle] = useState('');
+  const [editExpenseAmount, setEditExpenseAmount] = useState('');
+  const [editExpenseCategory, setEditExpenseCategory] = useState('');
+  const [editExpenseDate, setEditExpenseDate] = useState('');
+  const [editExpenseStatus, setEditExpenseStatus] = useState<'Verified' | 'Pending'>('Pending');
   const [newPasscode, setNewPasscode] = useState('');
   const [confirmPasscode, setConfirmPasscode] = useState('');
   const [newProject, setNewProject] = useState({
@@ -963,6 +1296,13 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
     raised: 0,
     icon: '🤝',
     color: 'emerald'
+  });
+  const [newExpense, setNewExpense] = useState({
+    title: '',
+    amount: 0,
+    category: 'Infrastructure',
+    date: new Date().toISOString().split('T')[0],
+    status: 'Pending' as 'Verified' | 'Pending'
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -1048,16 +1388,101 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
     setEditGoalIcon('');
   };
 
+  const handleExpenseSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newExpense.title && newExpense.amount > 0) {
+      onAddExpense(newExpense);
+      setNewExpense({ title: '', amount: 0, category: 'Infrastructure', date: new Date().toISOString().split('T')[0], status: 'Pending' });
+      setShowForm(false);
+    }
+  };
+
+  const startEditingExpense = (expense: Expense) => {
+    setEditingExpenseId(expense.id);
+    setEditExpenseTitle(expense.title);
+    setEditExpenseAmount(expense.amount.toString());
+    setEditExpenseCategory(expense.category);
+    setEditExpenseDate(expense.date);
+    setEditExpenseStatus(expense.status);
+  };
+
+  const saveExpense = (expenseId: number) => {
+    const amount = parseFloat(editExpenseAmount);
+    if (!isNaN(amount) && amount > 0 && editExpenseTitle.trim()) {
+      onUpdateExpense(expenseId, {
+        title: editExpenseTitle.trim(),
+        amount: amount,
+        category: editExpenseCategory,
+        date: editExpenseDate,
+        status: editExpenseStatus
+      });
+      setEditingExpenseId(null);
+      setEditExpenseTitle('');
+      setEditExpenseAmount('');
+      setEditExpenseCategory('');
+      setEditExpenseDate('');
+      setEditExpenseStatus('Pending');
+    }
+  };
+
+  const cancelExpenseEdit = () => {
+    setEditingExpenseId(null);
+    setEditExpenseTitle('');
+    setEditExpenseAmount('');
+    setEditExpenseCategory('');
+    setEditExpenseDate('');
+    setEditExpenseStatus('Pending');
+  };
+
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500">
       <div className="px-6 py-8 border-b border-slate-900">
         <div className="flex items-center gap-4 mb-4">
-          <button onClick={onBack} className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-slate-400 hover:text-white">
-            <ChevronRight size={20} className="rotate-180" />
+          <button onClick={onLogout} className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors">
+            <LogOut size={18} />
           </button>
           <div>
             <h2 className="text-2xl font-bold text-white">Admin Dashboard</h2>
-            <p className="text-slate-400 text-sm">Manage Active Missions & Ministry Goals</p>
+            <p className="text-slate-400 text-sm">Manage Active Missions, Goals & Expenses</p>
+          </div>
+        </div>
+
+        {/* Families Supported Counter - Prominent Display */}
+        <div className="mb-4 bg-gradient-to-br from-emerald-900/30 to-emerald-800/20 border border-emerald-700/30 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                <span className="text-lg">👨‍👩‍👧‍👦</span>
+              </div>
+              <label className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Families Helped</label>
+            </div>
+            <div className="text-3xl font-black text-emerald-400">{familiesSupported}</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onDecrementFamilies}
+              className="flex-1 h-12 bg-slate-800/50 hover:bg-slate-800 border border-slate-700 rounded-xl flex items-center justify-center text-slate-300 font-bold text-2xl transition-colors"
+              title="Decrease count"
+            >
+              −
+            </button>
+            <button
+              onClick={onIncrementFamilies}
+              className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 border border-emerald-500 rounded-xl flex items-center justify-center text-white font-bold text-2xl transition-colors shadow-lg"
+              title="Increase count"
+            >
+              +
+            </button>
+          </div>
+          <div className="mt-3">
+            <input
+              type="number"
+              value={familiesSupported}
+              onChange={(e) => onSetFamiliesCount(parseInt(e.target.value) || 0)}
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-center text-lg font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+              placeholder="Set count directly..."
+              min="0"
+            />
           </div>
         </div>
 
@@ -1067,13 +1492,19 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
             onClick={() => { setActiveTab('missions'); setShowForm(false); }}
             className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${activeTab === 'missions' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500'}`}
           >
-            Active Missions
+            Missions
           </button>
           <button
             onClick={() => { setActiveTab('goals'); setShowForm(false); }}
             className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${activeTab === 'goals' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500'}`}
           >
-            Ministry Goals
+            Goals
+          </button>
+          <button
+            onClick={() => { setActiveTab('ledger'); setShowForm(false); }}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${activeTab === 'ledger' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500'}`}
+          >
+            Ledger
           </button>
         </div>
         <div className="flex gap-3">
@@ -1081,7 +1512,7 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
             onClick={() => setShowForm(!showForm)}
             className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-emerald-700 transition-colors shadow-xl flex items-center justify-center gap-2"
           >
-            <Plus size={18} /> Add New {activeTab === 'missions' ? 'Mission' : 'Goal'}
+            <Plus size={18} /> Add New {activeTab === 'missions' ? 'Mission' : activeTab === 'goals' ? 'Goal' : 'Expense'}
           </button>
           <button 
             onClick={() => setShowPasscodeForm(!showPasscodeForm)}
@@ -1090,38 +1521,6 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
           >
             🔒
           </button>
-        </div>
-
-        {/* Families Supported Counter */}
-        <div className="mt-4 bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Families Supported</label>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onDecrementFamilies}
-              className="w-10 h-10 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg flex items-center justify-center text-white font-bold text-xl transition-colors"
-            >
-              −
-            </button>
-            <div className="flex-1 bg-slate-800 rounded-lg px-4 py-2 text-center">
-              <span className="text-2xl font-bold text-white">{familiesSupported}</span>
-            </div>
-            <button
-              onClick={onIncrementFamilies}
-              className="w-10 h-10 bg-sky-600 hover:bg-sky-700 border border-sky-500 rounded-lg flex items-center justify-center text-white font-bold text-xl transition-colors"
-            >
-              +
-            </button>
-          </div>
-          <div className="mt-2">
-            <input
-              type="number"
-              value={familiesSupported}
-              onChange={(e) => onSetFamiliesCount(parseInt(e.target.value) || 0)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-sky-500"
-              placeholder="Set count directly..."
-              min="0"
-            />
-          </div>
         </div>
       </div>
 
@@ -1273,18 +1672,18 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Goal Amount</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Target Number</label>
                 <input 
                   type="number"
                   value={newGoal.goal || ''}
                   onChange={(e) => setNewGoal({...newGoal, goal: parseInt(e.target.value) || 0})}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-sky-500"
-                  placeholder="0"
+                  placeholder="e.g. 100"
                   required
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Raised So Far</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Current Progress</label>
                 <input 
                   type="number"
                   value={newGoal.raised || ''}
@@ -1465,13 +1864,13 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-500 mb-1 block">Goal Amount</label>
+                    <label className="text-xs text-slate-500 mb-1 block">Target Number</label>
                     <input
                       type="number"
                       value={editGoalAmount}
                       onChange={(e) => setEditGoalAmount(e.target.value)}
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-sky-500"
-                      placeholder="Enter goal amount"
+                      placeholder="Enter target number"
                     />
                   </div>
                   <div className="flex gap-2">
@@ -1519,16 +1918,243 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
                   </div>
                   <p className="text-xs text-slate-400 mb-3">{goal.description}</p>
                   <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                    <span>Goal: ${goal.goal.toLocaleString()}</span>
-                    <span>Raised: ${goal.raised.toLocaleString()}</span>
+                    <span className="font-bold text-white">{goal.raised.toLocaleString()} of {goal.goal.toLocaleString()}</span>
+                    <span>{Math.round((goal.raised / goal.goal) * 100)}% Complete</span>
                   </div>
                   <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                    <div className={`h-full bg-${goal.color}-500`} style={{ width: `${(goal.raised / goal.goal) * 100}%` }}></div>
+                    <div className={`h-full bg-${goal.color}-500`} style={{ width: `${Math.min((goal.raised / goal.goal) * 100, 100)}%` }}></div>
                   </div>
                 </>
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {showForm && activeTab === 'ledger' && (
+        <div className="px-6 py-6 bg-slate-900/50 border-b border-slate-900">
+          <form onSubmit={handleExpenseSubmit} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Expense Title</label>
+              <input 
+                type="text"
+                value={newExpense.title}
+                onChange={(e) => setNewExpense({...newExpense, title: e.target.value})}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-sky-500"
+                placeholder="Enter expense description..."
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Amount ($)</label>
+                <input 
+                  type="number"
+                  step="0.01"
+                  value={newExpense.amount || ''}
+                  onChange={(e) => setNewExpense({...newExpense, amount: parseFloat(e.target.value) || 0})}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-sky-500"
+                  placeholder="0.00"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Category</label>
+                <select 
+                  value={newExpense.category}
+                  onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-sky-500"
+                >
+                  <option value="Infrastructure">Infrastructure</option>
+                  <option value="Aid">Aid</option>
+                  <option value="Events">Events</option>
+                  <option value="Logistics">Logistics</option>
+                  <option value="Community">Community</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Date</label>
+                <input 
+                  type="date"
+                  value={newExpense.date}
+                  onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-sky-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Status</label>
+                <select 
+                  value={newExpense.status}
+                  onChange={(e) => setNewExpense({...newExpense, status: e.target.value as 'Verified' | 'Pending'})}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-sky-500"
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="Verified">Verified</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                type="submit"
+                className="flex-1 py-3 bg-sky-600 text-white font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-sky-700 transition-colors"
+              >
+                Add Expense
+              </button>
+              <button 
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="px-6 py-3 bg-slate-900 border border-slate-800 text-slate-400 font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeTab === 'ledger' && (
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Expense Ledger ({expenses.length})</h3>
+          {expenses.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+              <FileText size={48} className="mx-auto mb-4 opacity-50" />
+              <p className="text-sm">No expenses recorded yet.</p>
+              <p className="text-xs mt-2">Click "Add New Expense" to get started.</p>
+            </div>
+          ) : (
+            expenses.map((expense) => (
+              <div key={expense.id} className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
+                {editingExpenseId === expense.id ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Expense Title</label>
+                      <input
+                        type="text"
+                        value={editExpenseTitle}
+                        onChange={(e) => setEditExpenseTitle(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-sky-500"
+                        placeholder="Enter expense title"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Amount ($)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editExpenseAmount}
+                          onChange={(e) => setEditExpenseAmount(e.target.value)}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-sky-500"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Category</label>
+                        <select
+                          value={editExpenseCategory}
+                          onChange={(e) => setEditExpenseCategory(e.target.value)}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-sky-500"
+                        >
+                          <option value="Infrastructure">Infrastructure</option>
+                          <option value="Aid">Aid</option>
+                          <option value="Events">Events</option>
+                          <option value="Logistics">Logistics</option>
+                          <option value="Community">Community</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Date</label>
+                        <input
+                          type="date"
+                          value={editExpenseDate}
+                          onChange={(e) => setEditExpenseDate(e.target.value)}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">Status</label>
+                        <select
+                          value={editExpenseStatus}
+                          onChange={(e) => setEditExpenseStatus(e.target.value as 'Verified' | 'Pending')}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-sky-500"
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Verified">Verified</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => saveExpense(expense.id)}
+                        className="flex-1 py-2 bg-sky-600 text-white font-bold rounded-lg text-xs uppercase tracking-widest hover:bg-sky-700 transition-colors"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={cancelExpenseEdit}
+                        className="px-4 py-2 bg-slate-800 border border-slate-700 text-slate-400 font-bold rounded-lg text-xs uppercase tracking-widest hover:bg-slate-700 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-start gap-3 flex-1">
+                        <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 mt-1">
+                          <FileText size={18} />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-white text-sm mb-1">{expense.title}</h4>
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <span>{expense.date}</span>
+                            <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
+                            <span className="text-slate-400">{expense.category}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <div className="text-right mr-2">
+                          <div className="font-mono font-bold text-white text-sm">-${expense.amount.toFixed(2)}</div>
+                          <div className={`text-[10px] font-bold mt-1 ${expense.status === 'Verified' ? 'text-emerald-500' : 'text-amber-500'}`}>
+                            {expense.status}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => startEditingExpense(expense)}
+                          className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 transition-colors flex items-center justify-center"
+                          title="Edit Expense"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete "${expense.title}"?`)) {
+                              onDeleteExpense(expense.id);
+                            }
+                          }}
+                          className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors flex items-center justify-center"
+                          title="Delete Expense"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -1538,7 +2164,125 @@ function AdminScreen({ projects, onAddProject, onDeleteProject, onUpdateProject,
 // ==========================================
 // 5. PROFILE SCREEN
 // ==========================================
-function ProfileScreen({ user, onLogout }: { user: User | null; onLogout: () => void }) {
+function ProfileScreen({ user, onLogout, prayerRequests, onAddPrayerRequest, onIncrementPrayers }: { user: User | null; onLogout: () => void; prayerRequests: PrayerRequest[]; onAddPrayerRequest: (request: Omit<PrayerRequest, 'id' | 'prayers'>) => void; onIncrementPrayers: (requestId: number) => void }) {
+  const [donations, setDonations] = useState<any[]>([]);
+  const [loadingDonations, setLoadingDonations] = useState(true);
+  const [totalGiven, setTotalGiven] = useState(0);
+  const [activeTab, setActiveTab] = useState<'info' | 'prayers'>('info');
+  const [showPrayerForm, setShowPrayerForm] = useState(false);
+  const [prayerForm, setPrayerForm] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    request: '',
+    isAnonymous: false
+  });
+  const db = getFirestore();
+
+  // Load user's donations from Firestore
+  useEffect(() => {
+    const loadDonations = async () => {
+      if (!user) return;
+      
+      try {
+        setLoadingDonations(true);
+        console.log('📥 Loading donations from Firestore...');
+        
+        // Query donations for this user (by email)
+        const q = query(
+          collection(db, 'donations'),
+          orderBy('createdAt', 'desc')
+        );
+        const querySnapshot = await getDocs(q);
+        
+        const userDonations: any[] = [];
+        let total = 0;
+        
+        console.log('👤 Current user email:', user.email);
+        console.log('📊 Total donations in database:', querySnapshot.size);
+        
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          console.log('💰 Donation found:', {
+            id: doc.id,
+            donorEmail: data.donorEmail,
+            amount: data.amount,
+            status: data.status,
+            matches: data.donorEmail === user.email
+          });
+          
+          // Filter by user's email - only show this user's donations
+          if (user.email && data.donorEmail === user.email) {
+            userDonations.push({
+              id: doc.id,
+              ...data,
+              date: data.createdAt?.toDate().toLocaleDateString() || 'N/A'
+            });
+            // Only count completed donations in total
+            if (data.status === 'completed') {
+              total += data.amount || 0;
+            }
+          }
+        });
+        
+        console.log('✅ Loaded donations for user:', userDonations.length);
+        console.log('💵 Total given:', total);
+        setDonations(userDonations);
+        setTotalGiven(total);
+      } catch (error) {
+        console.error('❌ Error loading donations:', error);
+      } finally {
+        setLoadingDonations(false);
+      }
+    };
+
+    loadDonations();
+  }, [user]);
+
+  const handlePrayerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prayerForm.request.trim()) return;
+
+    try {
+      await onAddPrayerRequest({
+        name: prayerForm.isAnonymous ? 'Anonymous' : prayerForm.name,
+        email: prayerForm.email,
+        request: prayerForm.request,
+        isAnonymous: prayerForm.isAnonymous,
+        createdAt: new Date().toISOString()
+      });
+      
+      setPrayerForm({ ...prayerForm, request: '' });
+      setShowPrayerForm(false);
+      setActiveTab('prayers');
+      alert('🙏 Prayer request submitted successfully!');
+    } catch (error) {
+      console.error('Error submitting prayer request:', error);
+    }
+  };
+
+  const shareOnFacebook = () => {
+    const url = encodeURIComponent('https://sky-raven-ministries.vercel.app');
+    const text = encodeURIComponent('Check out SkyRaven Ministries - making a difference in our community!');
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank');
+  };
+
+  const shareOnTwitter = () => {
+    const url = encodeURIComponent('https://sky-raven-ministries.vercel.app');
+    const text = encodeURIComponent('Join me in supporting SkyRaven Ministries! Together we can make a difference. 🙏');
+    window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank');
+  };
+
+  const shareViaEmail = () => {
+    const subject = encodeURIComponent('Check out SkyRaven Ministries');
+    const body = encodeURIComponent('I wanted to share this amazing ministry with you: https://sky-raven-ministries.vercel.app\\n\\nSkyRaven Ministries is making a real difference in our community. Come see how you can get involved!');
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText('https://sky-raven-ministries.vercel.app');
+    alert('✅ Link copied to clipboard!');
+  };
+
   if (!user) {
     return (
       <div className="p-6 flex items-center justify-center min-h-screen">
@@ -1550,8 +2294,9 @@ function ProfileScreen({ user, onLogout }: { user: User | null; onLogout: () => 
   }
   
   return (
-    <div className="p-6 animate-in fade-in">
-      <div className="text-center mb-8 pt-4">
+    <div className="animate-in fade-in pb-24">
+      {/* Header */}
+      <div className="p-6 text-center pt-8">
         <div className="w-20 h-20 bg-slate-800 rounded-full mx-auto mb-4 border-2 border-sky-500 p-1">
           <div className="w-full h-full bg-slate-700 rounded-full flex items-center justify-center text-2xl font-bold text-slate-400">
             {user.name.charAt(0)}
@@ -1561,42 +2306,226 @@ function ProfileScreen({ user, onLogout }: { user: User | null; onLogout: () => 
         <p className="text-sm text-sky-500 font-medium">{user.role} • Member since 2021</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-center">
-          <div className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Total Given</div>
-          <div className="text-2xl font-black text-white">$0</div>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-center">
-          <div className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Tax Receipt</div>
-          <div className="text-sm font-bold text-sky-400 flex items-center justify-center gap-1 cursor-pointer">
-            Download 2023
-          </div>
+      {/* Tab Navigation */}
+      <div className="px-6 mb-4">
+        <div className="bg-slate-900 p-1 rounded-xl flex border border-slate-800">
+          <button
+            onClick={() => setActiveTab('info')}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${activeTab === 'info' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500'}`}
+          >
+            Profile
+          </button>
+          <button
+            onClick={() => setActiveTab('prayers')}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${activeTab === 'prayers' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500'}`}
+          >
+            Prayer Feed
+          </button>
         </div>
       </div>
 
-      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Donation History</h3>
-      <div className="space-y-3 mb-8">
-        {MY_DONATIONS.map((d) => (
-          <div key={d.id} className="flex justify-between items-center py-3 border-b border-slate-900">
-            <div>
-              <div className="font-bold text-white text-sm">{d.project}</div>
-              <div className="text-xs text-slate-500">{d.date}</div>
+      {activeTab === 'info' ? (
+        <div className="px-6">
+          {/* Donation Stats */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-center">
+              <div className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Total Given</div>
+              <div className="text-2xl font-black text-white">${totalGiven.toFixed(2)}</div>
             </div>
-            <div className="font-mono text-white font-bold">${d.amount.toFixed(2)}</div>
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl text-center">
+              <div className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Tax Receipt</div>
+              <div className="text-sm font-bold text-sky-400 flex items-center justify-center gap-1 cursor-pointer">
+                Download 2023
+              </div>
+            </div>
           </div>
-        ))}
-      </div>
 
-      <button onClick={async () => {
-        try {
-          await firebaseAuthService.signOut();
-          onLogout();
-        } catch (error) {
-          console.error('Logout error:', error);
-        }
-      }} className="w-full py-4 bg-slate-900 text-slate-500 font-bold rounded-xl text-sm uppercase tracking-widest hover:text-red-400 hover:bg-slate-900 transition-colors flex items-center justify-center gap-2">
-        <LogOut size={18} /> Sign Out
-      </button>
+          {/* Contact Information */}
+          <div className="mb-6 bg-gradient-to-br from-sky-900/30 to-sky-800/20 border border-sky-700/30 rounded-2xl p-5">
+            <h3 className="text-sm font-bold text-sky-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span>📞</span> Contact Ministry
+            </h3>
+            <div className="space-y-3">
+              <a href="tel:5392517999" className="flex items-center gap-3 text-white hover:text-sky-400 transition-colors">
+                <div className="w-10 h-10 bg-sky-600/20 border border-sky-500/30 rounded-lg flex items-center justify-center">
+                  <Phone size={18} className="text-sky-400" />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-400">Phone</div>
+                  <div className="font-bold">539.251.7999</div>
+                </div>
+              </a>
+              <a href="mailto:Admin@SkyRavenMinistries.com" className="flex items-center gap-3 text-white hover:text-sky-400 transition-colors">
+                <div className="w-10 h-10 bg-sky-600/20 border border-sky-500/30 rounded-lg flex items-center justify-center">
+                  <Mail size={18} className="text-sky-400" />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-400">Email</div>
+                  <div className="font-bold text-sm">Admin@SkyRavenMinistries.com</div>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          {/* Social Sharing */}
+          <div className="mb-6 bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Share2 size={16} /> Share Ministry
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={shareOnFacebook}
+                className="py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
+              >
+                Facebook
+              </button>
+              <button
+                onClick={shareOnTwitter}
+                className="py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl text-xs uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
+              >
+                Twitter
+              </button>
+              <button
+                onClick={shareViaEmail}
+                className="py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl text-xs uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
+              >
+                <Mail size={14} /> Email
+              </button>
+              <button
+                onClick={copyLink}
+                className="py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl text-xs uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
+              >
+                <Copy size={14} /> Copy Link
+              </button>
+            </div>
+          </div>
+
+          {/* Submit Prayer Request */}
+          <div className="mb-6">
+            <button
+              onClick={() => setShowPrayerForm(!showPrayerForm)}
+              className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold rounded-xl text-sm uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2"
+            >
+              <span>🙏</span> {showPrayerForm ? 'Cancel' : 'Submit Prayer Request'}
+            </button>
+          </div>
+
+          {showPrayerForm && (
+            <div className="mb-6 bg-slate-900 border border-slate-800 rounded-2xl p-5 animate-in fade-in slide-in-from-bottom-4">
+              <h3 className="text-lg font-bold text-white mb-4">Prayer Request</h3>
+              <form onSubmit={handlePrayerSubmit} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Your Name</label>
+                  <input
+                    type="text"
+                    value={prayerForm.name}
+                    onChange={(e) => setPrayerForm({ ...prayerForm, name: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    placeholder="Enter your name"
+                    required={!prayerForm.isAnonymous}
+                    disabled={prayerForm.isAnonymous}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Prayer Request</label>
+                  <textarea
+                    value={prayerForm.request}
+                    onChange={(e) => setPrayerForm({ ...prayerForm, request: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 min-h-[120px]"
+                    placeholder="Share your prayer request..."
+                    required
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="anonymous"
+                    checked={prayerForm.isAnonymous}
+                    onChange={(e) => setPrayerForm({ ...prayerForm, isAnonymous: e.target.checked })}
+                    className="w-4 h-4 rounded bg-slate-800 border-slate-700"
+                  />
+                  <label htmlFor="anonymous" className="text-sm text-slate-400">Submit anonymously</label>
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-sm uppercase tracking-widest transition-colors"
+                >
+                  Submit Prayer Request
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Donation History */}
+          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Donation History</h3>
+          <div className="space-y-3 mb-8">
+            {loadingDonations ? (
+              <div className="text-center text-slate-500 py-4">Loading donations...</div>
+            ) : donations.length === 0 ? (
+              <div className="text-center text-slate-500 py-4">No donations yet</div>
+            ) : (
+              donations.map((d) => (
+                <div key={d.id} className="flex justify-between items-center py-3 border-b border-slate-900">
+                  <div>
+                    <div className="font-bold text-white text-sm">{d.projectId || 'General Fund'}</div>
+                    <div className="text-xs text-slate-500">
+                      {d.date} • {d.status}
+                    </div>
+                  </div>
+                  <div className="font-mono text-white font-bold">${(d.amount || 0).toFixed(2)}</div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Sign Out Button */}
+          <button onClick={async () => {
+            try {
+              await firebaseAuthService.signOut();
+              onLogout();
+            } catch (error) {
+              console.error('Logout error:', error);
+            }
+          }} className="w-full py-4 bg-slate-900 text-slate-500 font-bold rounded-xl text-sm uppercase tracking-widest hover:text-red-400 hover:bg-slate-900 transition-colors flex items-center justify-center gap-2">
+            <LogOut size={18} /> Sign Out
+          </button>
+        </div>
+      ) : (
+        <div className="px-6">
+          {/* Prayer Feed */}
+          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Community Prayer Requests ({prayerRequests.length})</h3>
+          <div className="space-y-4">
+            {prayerRequests.length === 0 ? (
+              <div className="text-center py-12 text-slate-500">
+                <span className="text-4xl mb-4 block">🙏</span>
+                <p className="text-sm">No prayer requests yet.</p>
+                <p className="text-xs mt-2">Be the first to submit one!</p>
+              </div>
+            ) : (
+              prayerRequests.map((request) => (
+                <div key={request.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="font-bold text-white text-sm mb-1">{request.name}</div>
+                      <div className="text-xs text-slate-500">
+                        {new Date(request.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onIncrementPrayers(request.id)}
+                      className="flex items-center gap-2 py-2 px-3 bg-purple-600/20 border border-purple-500/30 rounded-lg text-purple-400 hover:bg-purple-600/30 transition-colors"
+                    >
+                      <span>🙏</span>
+                      <span className="text-sm font-bold">{request.prayers}</span>
+                    </button>
+                  </div>
+                  <p className="text-slate-300 text-sm leading-relaxed">{request.request}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1675,7 +2604,7 @@ function BottomNav({ current, onChange }: { current: string; onChange: (view: st
   ];
 
   return (
-    <div className="bg-slate-950/80 backdrop-blur-xl border-t border-slate-900 pb-6 pt-2 px-6 flex justify-between items-center absolute bottom-0 w-full z-20">
+    <div className="bg-slate-950/80 backdrop-blur-xl border-t border-slate-900 pb-6 pt-2 px-6 flex justify-between items-center fixed bottom-0 w-full max-w-md z-20">
       {items.map((item) => (
         <button 
           key={item.id}

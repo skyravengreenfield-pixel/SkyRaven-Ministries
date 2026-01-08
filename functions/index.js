@@ -23,7 +23,7 @@ const corsHandler = cors({
 });
 
 /**
- * Create Payment Intent
+ * Create Payment Intent or Subscription
  * POST /createPaymentIntent
  */
 exports.createPaymentIntent = functions.https.onRequest(async (req, res) => {
@@ -41,6 +41,7 @@ exports.createPaymentIntent = functions.https.onRequest(async (req, res) => {
         donorEmail,
         projectId,
         message,
+        recurring = false,
       } = req.body;
 
       // Validate required fields
@@ -50,43 +51,122 @@ exports.createPaymentIntent = functions.https.onRequest(async (req, res) => {
         });
       }
 
-      // Create payment intent
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // Convert to cents
-        currency: currency.toLowerCase(),
-        receipt_email: donorEmail,
-        metadata: {
+      // Handle recurring donations (monthly subscriptions)
+      if (recurring) {
+        // Find or create customer
+        const existingCustomers = await stripe.customers.list({
+          email: donorEmail,
+          limit: 1,
+        });
+
+        let customer;
+        if (existingCustomers.data.length > 0) {
+          customer = existingCustomers.data[0];
+        } else {
+          customer = await stripe.customers.create({
+            email: donorEmail,
+            name: donorName,
+            metadata: {
+              projectId: projectId?.toString() || '',
+            },
+          });
+        }
+
+        // Create a price for this specific donation amount
+        const price = await stripe.prices.create({
+          unit_amount: Math.round(amount * 100), // Convert to cents
+          currency: currency.toLowerCase(),
+          recurring: {
+            interval: 'month',
+          },
+          product_data: {
+            name: `Monthly Donation${projectId ? ` - ${projectId}` : ''}`,
+            metadata: {
+              donorName,
+              projectId: projectId?.toString() || '',
+              message: message || '',
+            },
+          },
+        });
+
+        // Create subscription with setup for future payments
+        const subscription = await stripe.subscriptions.create({
+          customer: customer.id,
+          items: [{ price: price.id }],
+          payment_behavior: 'default_incomplete',
+          payment_settings: {
+            payment_method_types: ['card'],
+            save_default_payment_method: 'on_subscription',
+          },
+          expand: ['latest_invoice.payment_intent'],
+          metadata: {
+            donorName,
+            donorEmail,
+            projectId: projectId?.toString() || '',
+            message: message || '',
+          },
+        });
+
+        // Store subscription in Firestore
+        await admin.firestore().collection('subscriptions').add({
+          subscriptionId: subscription.id,
+          customerId: customer.id,
+          priceId: price.id,
+          amount,
+          currency,
           donorName,
-          projectId: projectId?.toString() || '',
+          donorEmail,
+          projectId: projectId || null,
           message: message || '',
-        },
-        payment_method_types: ['card'], // Only allow card payments
-        automatic_payment_methods: {
-          enabled: false, // Disable automatic payment methods to prevent Affirm, etc.
-        },
-      });
+          status: subscription.status,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
 
-      // Store donation in Firestore
-      await admin.firestore().collection('donations').add({
-        paymentIntentId: paymentIntent.id,
-        amount,
-        currency,
-        donorName,
-        donorEmail,
-        projectId: projectId || null,
-        message: message || '',
-        status: 'pending',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+        res.json({
+          clientSecret: subscription.latest_invoice.payment_intent.client_secret,
+          subscriptionId: subscription.id,
+          type: 'subscription',
+        });
+      } else {
+        // Handle one-time donations
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: Math.round(amount * 100), // Convert to cents
+          currency: currency.toLowerCase(),
+          receipt_email: donorEmail,
+          metadata: {
+            donorName,
+            projectId: projectId?.toString() || '',
+            message: message || '',
+          },
+          payment_method_types: ['card'], // Only allow card payments
+          automatic_payment_methods: {
+            enabled: false, // Disable automatic payment methods to prevent Affirm, etc.
+          },
+        });
 
-      res.json({
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
-      });
+        // Store donation in Firestore
+        await admin.firestore().collection('donations').add({
+          paymentIntentId: paymentIntent.id,
+          amount,
+          currency,
+          donorName,
+          donorEmail,
+          projectId: projectId || null,
+          message: message || '',
+          status: 'pending',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        res.json({
+          clientSecret: paymentIntent.client_secret,
+          paymentIntentId: paymentIntent.id,
+          type: 'payment',
+        });
+      }
     } catch (error) {
-      console.error('Payment intent creation failed:', error);
+      console.error('Payment/Subscription creation failed:', error);
       res.status(500).json({
-        error: 'Failed to create payment intent',
+        error: 'Failed to create payment or subscription',
         message: error.message,
       });
     }
@@ -344,6 +424,62 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
       case 'customer.subscription.deleted':
         const deletedSubscription = event.data.object;
         console.log('Subscription cancelled:', deletedSubscription.id);
+        
+        // Update subscription status
+        const cancelledSnapshot = await admin
+          .firestore()
+          .collection('subscriptions')
+          .where('subscriptionId', '==', deletedSubscription.id)
+          .limit(1)
+          .get();
+
+        if (!cancelledSnapshot.empty) {
+          await cancelledSnapshot.docs[0].ref.update({
+            status: 'cancelled',
+            cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        break;
+
+      case 'invoice.payment_succeeded':
+        const invoice = event.data.object;
+        console.log('Invoice payment succeeded:', invoice.id);
+        
+        // Record successful recurring donation
+        if (invoice.subscription) {
+          await admin.firestore().collection('donations').add({
+            subscriptionId: invoice.subscription,
+            invoiceId: invoice.id,
+            amount: invoice.amount_paid / 100, // Convert from cents
+            currency: invoice.currency,
+            status: 'completed',
+            isRecurring: true,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        break;
+
+      case 'invoice.payment_failed':
+        const failedInvoice = event.data.object;
+        console.log('Invoice payment failed:', failedInvoice.id);
+        
+        // Record failed recurring payment
+        if (failedInvoice.subscription) {
+          const subDoc = await admin
+            .firestore()
+            .collection('subscriptions')
+            .where('subscriptionId', '==', failedInvoice.subscription)
+            .limit(1)
+            .get();
+
+          if (!subDoc.empty) {
+            await subDoc.docs[0].ref.update({
+              lastPaymentFailed: true,
+              lastFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+        }
+        break;
         
         // Update subscription status
         const delSnapshot = await admin
