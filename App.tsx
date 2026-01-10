@@ -571,6 +571,9 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -614,6 +617,36 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setResetSuccess('');
+    setLoading(true);
+
+    try {
+      if (!resetEmail) {
+        setError('Please enter your email address');
+        setLoading(false);
+        return;
+      }
+      
+      await firebaseAuthService.resetPassword(resetEmail);
+      setResetSuccess('Password reset email sent! Check your inbox.');
+      setResetEmail('');
+      
+      // Auto-close after 3 seconds
+      setTimeout(() => {
+        setShowForgotPassword(false);
+        setResetSuccess('');
+      }, 3000);
+    } catch (err: any) {
+      console.error('Password reset error:', err);
+      setError(err.message || 'Failed to send reset email. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col p-8 justify-end relative">
       <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-sky-900/20 to-transparent"></div>
@@ -627,6 +660,60 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
       </div>
 
       <div className="relative z-10 mb-8">
+        {showForgotPassword ? (
+          // Forgot Password Form
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div className="mb-4">
+              <h3 className="text-2xl font-bold text-white mb-2">Reset Password</h3>
+              <p className="text-sm text-slate-400">Enter your email to receive a password reset link</p>
+            </div>
+            
+            <input
+              type="email"
+              placeholder="Email Address"
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              className="w-full px-4 py-4 bg-slate-900 border border-slate-800 text-white rounded-xl placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-colors"
+              disabled={loading}
+            />
+            
+            {error && (
+              <div className="text-red-400 text-sm text-center bg-red-500/10 border border-red-500/20 rounded-lg py-2">
+                {error}
+              </div>
+            )}
+            
+            {resetSuccess && (
+              <div className="text-green-400 text-sm text-center bg-green-500/10 border border-green-500/20 rounded-lg py-2">
+                {resetSuccess}
+              </div>
+            )}
+
+            <button 
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-200 transition-colors shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Sending...' : 'Send Reset Link'}
+            </button>
+            
+            <button 
+              type="button"
+              onClick={() => {
+                setShowForgotPassword(false);
+                setError('');
+                setResetSuccess('');
+                setResetEmail('');
+              }}
+              disabled={loading}
+              className="w-full py-4 bg-slate-900 border border-slate-800 text-white font-bold rounded-xl text-sm uppercase tracking-widest hover:bg-slate-800 transition-colors disabled:opacity-50"
+            >
+              Back to Sign In
+            </button>
+          </form>
+        ) : (
+          // Regular Sign In/Sign Up Form
+          <>
         <form onSubmit={handleSubmit} className="space-y-4">
           {isSignUp && (
             <input
@@ -670,6 +757,19 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
           </button>
         </form>
 
+        {!isSignUp && (
+          <button 
+            onClick={() => {
+              setShowForgotPassword(true);
+              setError('');
+            }}
+            disabled={loading}
+            className="w-full mt-3 text-sm text-sky-400 hover:text-sky-300 transition-colors disabled:opacity-50"
+          >
+            Forgot your password?
+          </button>
+        )}
+
         <button 
           onClick={() => {
             setIsSignUp(!isSignUp);
@@ -688,6 +788,8 @@ function AuthScreen({ onLogin, onAdminLogin }: { onLogin: () => void; onAdminLog
         >
           Admin Dashboard
         </button>
+          </>
+        )}
       </div>
       
       <div className="text-center text-xs text-slate-600 font-medium">

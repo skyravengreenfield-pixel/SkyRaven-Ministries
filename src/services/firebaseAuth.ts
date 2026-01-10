@@ -15,12 +15,14 @@ import {
   GoogleAuthProvider,
   Auth,
 } from 'firebase/auth';
-import { getFirebaseAuth } from '../config/firebase';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirebaseAuth, getFirebaseFirestore } from '../config/firebase';
 import { logger } from '../utils/logger';
 import { User } from '../types';
 
 class FirebaseAuthService {
   private _auth: Auth | null = null;
+  private _db: any = null;
   private googleProvider = new GoogleAuthProvider();
 
   /**
@@ -41,12 +43,26 @@ class FirebaseAuthService {
   }
 
   /**
+   * Get Firestore instance (lazy-loaded)
+   */
+  private get db() {
+    if (!this._db) {
+      this._db = getFirebaseFirestore();
+    }
+    return this._db;
+  }
+
+  /**
    * Sign in with email and password
    */
   async signIn(email: string, password: string): Promise<User> {
     try {
       const userCredential = await signInWithEmailAndPassword(this.auth, email, password);
       logger.info('User signed in successfully', { uid: userCredential.user.uid });
+      
+      // Ensure user document exists in Firestore
+      await this.ensureUserDocument(userCredential.user);
+      
       return this.mapFirebaseUser(userCredential.user);
     } catch (error: any) {
       console.error('Sign in error details:', {
@@ -78,6 +94,11 @@ class FirebaseAuthService {
       await updateProfile(userCredential.user, { displayName });
       console.log('✓ Profile updated');
       
+      // Save user data to Firestore (WITHOUT password - it stays in Firebase Auth)
+      console.log('Saving user profile to Firestore...');
+      await this.createUserDocument(userCredential.user, displayName);
+      console.log('✓ User profile saved to Firestore');
+      
       logger.info('User signed up successfully', { uid: userCredential.user.uid });
       return this.mapFirebaseUser(userCredential.user);
     } catch (error: any) {
@@ -101,6 +122,10 @@ class FirebaseAuthService {
     try {
       const result = await signInWithPopup(this.auth, this.googleProvider);
       logger.info('User signed in with Google', { uid: result.user.uid });
+      
+      // Ensure user document exists in Firestore
+      await this.ensureUserDocument(result.user);
+      
       return this.mapFirebaseUser(result.user);
     } catch (error: any) {
       logger.error('Google sign in failed', { error });
@@ -158,6 +183,63 @@ class FirebaseAuthService {
     const user = this.getCurrentUser();
     if (!user) return null;
     return user.getIdToken();
+  }
+
+  /**
+   * Create user document in Firestore
+   */
+  private async createUserDocument(firebaseUser: FirebaseUser, displayName: string): Promise<void> {
+    try {
+      const userRef = doc(this.db, 'users', firebaseUser.uid);
+      await setDoc(userRef, {
+        id: firebaseUser.uid,
+        email: firebaseUser.email,
+        name: displayName || firebaseUser.displayName || 'User',
+        role: 'supporter',
+        photoURL: firebaseUser.photoURL || null,
+        emailVerified: firebaseUser.emailVerified,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      logger.info('User document created in Firestore', { uid: firebaseUser.uid });
+    } catch (error) {
+      logger.error('Failed to create user document', { error, uid: firebaseUser.uid });
+      // Don't throw - authentication succeeded, this is just profile data
+    }
+  }
+
+  /**
+   * Ensure user document exists in Firestore (for sign-in)
+   */
+  private async ensureUserDocument(firebaseUser: FirebaseUser): Promise<void> {
+    try {
+      const userRef = doc(this.db, 'users', firebaseUser.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        // Create document if it doesn't exist
+        await setDoc(userRef, {
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || 'User',
+          role: 'supporter',
+          photoURL: firebaseUser.photoURL || null,
+          emailVerified: firebaseUser.emailVerified,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        logger.info('User document created in Firestore', { uid: firebaseUser.uid });
+      } else {
+        // Update last sign-in time
+        await setDoc(userRef, {
+          updatedAt: serverTimestamp(),
+          emailVerified: firebaseUser.emailVerified,
+        }, { merge: true });
+      }
+    } catch (error) {
+      logger.error('Failed to ensure user document', { error, uid: firebaseUser.uid });
+      // Don't throw - authentication succeeded, this is just profile data
+    }
   }
 
   /**
